@@ -1,0 +1,13 @@
+---
+# Módulos aplicados a cada servidor. Sobrescreva em host_vars/<servidor>.yml,
+# por exemplo acrescentando "notebook" num notebook usado como servidor.
+servidor_modulos:
+  - base
+  - confiabilidade
+  - rede
+  - firewall
+
+# Dentro de um contêiner (o teste do CI), pula o que mexe no kernel do host.
+servidor_em_container: >-
+  {{ ansible_facts.virtualization_role == 'guest'
+     and ansible_facts.virtualization_type in ['docker', 'podman', 'container', 'lxc', 'systemd-nspawn'] }}

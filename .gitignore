@@ -1,0 +1,10 @@
+# Dados de cada servidor (IPs, MACs, senhas de Wi-Fi): só os .example vão para o git.
+/inventory/*
+!/inventory/*.example
+/host_vars/*
+!/host_vars/*.example
+
+# Ambiente e coleções, recriados por uv sync / ansible-galaxy.
+/.venv
+/.ansible
+__pycache__/

@@ -1,0 +1,89 @@
+---
+- name: Recusa um firewall sem SSH liberado
+  ansible.builtin.assert:
+    that: >-
+      firewall_zonas | map(attribute='tcp', default=[]) | flatten | map('int')
+      | select('equalto', firewall_porta_ssh | int) | list | length > 0
+    fail_msg: >-
+      Nenhuma zona libera a porta {{ firewall_porta_ssh }} (SSH); o firewall trancaria você fora.
+      Acrescente-a ao tcp de alguma zona em firewall_zonas.
+    quiet: true
+
+- name: Instala o nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    install_recommends: false
+
+- name: Tira a foto do firewall
+  ansible.builtin.include_role:
+    name: retorno
+    tasks_from: foto
+  vars:
+    retorno_nome: firewall
+    retorno_caminhos: [etc/nftables.conf, etc/systemd/system]
+
+- name: Escreve as regras
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0755"
+    validate: /usr/sbin/nft -c -f %s
+  register: firewall_regras
+
+- name: Confere se o nftables está ligado
+  ansible.builtin.command: # noqa: command-instead-of-module (consulta só leitura, também em --check)
+    cmd: systemctl is-enabled nftables.service
+  register: firewall_servico
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Aplica o firewall com retorno automático
+  when: firewall_regras is changed or firewall_servico.stdout != 'enabled'
+  block:
+    - name: Arma o retorno do firewall
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: armar
+      vars:
+        retorno_nome: firewall
+        retorno_segundos: "{{ firewall_retorno_segundos }}"
+        retorno_caminhos: [etc/nftables.conf, etc/systemd/system]
+
+    - name: Liga e carrega o nftables
+      ansible.builtin.systemd_service:
+        name: nftables.service
+        enabled: true
+        state: restarted
+
+    - name: Confirma que o SSH continua entrando
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: confirmar
+      vars:
+        retorno_nome: firewall
+        retorno_segundos: "{{ firewall_retorno_segundos }}"
+
+    - name: Desarma o retorno do firewall
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: desarmar
+      vars:
+        retorno_nome: firewall
+  rescue:
+    - name: Mantém o retorno do firewall armado
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: falhou
+      vars:
+        retorno_nome: firewall
+        retorno_segundos: "{{ firewall_retorno_segundos }}"
+
+- name: Descarta a foto do firewall sem mudança
+  ansible.builtin.include_role:
+    name: retorno
+    tasks_from: descartar
+  vars:
+    retorno_nome: firewall
+  when: not (firewall_regras is changed or firewall_servico.stdout != 'enabled')

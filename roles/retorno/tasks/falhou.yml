@@ -1,0 +1,7 @@
+---
+- name: Avisa que o retorno vai restaurar ({{ retorno_nome }})
+  ansible.builtin.fail:
+    msg: >-
+      A mudança de {{ retorno_nome }} falhou e o retorno continua armado: em até
+      {{ retorno_segundos }}s o servidor restaura {{ retorno_foto }} e reinicia.
+      Corrija host_vars e rode de novo depois que ele voltar.

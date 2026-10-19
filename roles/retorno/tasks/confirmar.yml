@@ -1,0 +1,9 @@
+---
+# Fecha a conexão atual: só uma conexão nova prova que a mudança não trancou o SSH.
+- name: Fecha a conexão atual
+  ansible.builtin.meta: reset_connection
+
+- name: Espera uma conexão nova ({{ retorno_nome }})
+  ansible.builtin.wait_for_connection:
+    delay: 3
+    timeout: "{{ retorno_segundos | int - 20 }}"

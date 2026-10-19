@@ -1,0 +1,64 @@
+---
+- name: Cria o drop-in do logind
+  ansible.builtin.file:
+    path: /etc/systemd/logind.conf.d
+    state: directory
+    mode: "0755"
+  when: notebook_ignorar_tampa
+
+- name: Ignora a tampa e as teclas de suspensão
+  ansible.builtin.template:
+    src: 10-servidor.conf.j2
+    dest: /etc/systemd/logind.conf.d/10-servidor.conf
+    mode: "0644"
+  when: notebook_ignorar_tampa
+  notify: Reinicia o logind
+
+- name: Mascara os alvos de suspensão
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: [sleep.target, suspend.target, hibernate.target, hybrid-sleep.target, suspend-then-hibernate.target]
+  when: notebook_sem_suspensao
+
+- name: Instala o upower
+  ansible.builtin.apt:
+    name: upower
+    state: present
+    install_recommends: false
+
+- name: Cria o drop-in do upower
+  ansible.builtin.file:
+    path: /etc/UPower/UPower.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Desliga o servidor com a bateria em {{ notebook_desligar_em }}%
+  ansible.builtin.template:
+    src: 70-servidor-upower.conf.j2
+    dest: /etc/UPower/UPower.conf.d/70-servidor.conf
+    mode: "0644"
+  notify: Reinicia o upower
+
+- name: Instala o limitador de carga
+  ansible.builtin.template:
+    src: limite-bateria.j2
+    dest: /usr/local/sbin/limite-bateria
+    mode: "0755"
+  when: notebook_bateria_limite
+
+- name: Instala as units do limitador
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/systemd/system/{{ item }}
+    mode: "0644"
+  loop: [limite-bateria.service, limite-bateria.timer]
+  when: notebook_bateria_limite
+
+- name: Liga o limitador de carga
+  ansible.builtin.systemd_service:
+    name: limite-bateria.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: notebook_bateria_limite

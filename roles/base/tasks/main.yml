@@ -1,0 +1,95 @@
+---
+- name: Fixa as fontes do apt no codinome
+  ansible.builtin.template:
+    src: debian.sources.j2
+    dest: /etc/apt/sources.list.d/debian.sources
+    mode: "0644"
+  register: base_fontes
+
+- name: Confere se ainda existe o sources.list antigo
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list
+  register: base_sources_list
+
+- name: Aposenta o sources.list antigo (cópia em sources.list.servidor-debian)
+  ansible.builtin.command:
+    cmd: mv /etc/apt/sources.list /etc/apt/sources.list.servidor-debian
+    creates: /etc/apt/sources.list.servidor-debian
+  when: base_sources_list.stat.exists and base_sources_list.stat.size > 0
+
+- name: Instala os pacotes base
+  ansible.builtin.apt:
+    name: "{{ base_pacotes + base_pacotes_extras }}"
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: "{{ 0 if base_fontes is changed else 3600 }}"
+
+- name: Põe o admin no grupo sudo
+  ansible.builtin.user:
+    name: "{{ base_usuario_admin }}"
+    groups: sudo
+    append: true
+  when: base_usuario_admin != 'root'
+
+- name: Autoriza as chaves SSH do admin
+  ansible.posix.authorized_key:
+    user: "{{ base_usuario_admin }}"
+    key: "{{ item }}"
+    state: present
+  loop: "{{ base_chaves_ssh }}"
+  loop_control:
+    label: "{{ item.split(' ')[2] | default(item[:30]) }}"
+
+- name: Lê as chaves autorizadas do admin
+  ansible.builtin.slurp:
+    src: "{{ '/root' if base_usuario_admin == 'root' else '/home/' ~ base_usuario_admin }}/.ssh/authorized_keys"
+  register: base_authorized_keys
+  failed_when: false
+  when: base_ssh_sem_senha
+
+- name: Recusa desligar a senha sem nenhuma chave autorizada
+  ansible.builtin.assert:
+    that: >-
+      base_chaves_ssh | length > 0
+      or (base_authorized_keys.content | default('') | b64decode | regex_search('^(ssh-|ecdsa-|sk-)', multiline=true))
+    fail_msg: >-
+      {{ base_usuario_admin }} não tem chave em authorized_keys; desligar o login por senha
+      trancaria você fora. Preencha base_chaves_ssh ou rode antes bin/novo-servidor.
+    quiet: true
+  when: base_ssh_sem_senha
+
+- name: Endurece o SSH
+  ansible.builtin.template:
+    src: 10-sem-senha.conf.j2
+    dest: /etc/ssh/sshd_config.d/10-sem-senha.conf
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Recarrega o ssh
+
+- name: Lista os pacotes instalados
+  ansible.builtin.package_facts:
+  when: base_travar_kernel
+
+- name: Trava o metapacote do kernel
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [linux-image-amd64, linux-headers-amd64]
+  when: base_travar_kernel and item in ansible_facts.packages
+
+- name: Instala o conferidor de módulos DKMS
+  ansible.builtin.copy:
+    src: confere-dkms
+    dest: /usr/local/sbin/confere-dkms
+    mode: "0755"
+  when: base_conferir_dkms
+
+- name: Roda o conferidor depois de cada dpkg
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/90-confere-dkms
+    mode: "0644"
+    content: |
+      // Gerado pelo servidor-debian (role base).
+      DPkg::Post-Invoke { "/usr/local/sbin/confere-dkms || true"; };
+  when: base_conferir_dkms

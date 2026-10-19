@@ -1,0 +1,15 @@
+# Gerado pelo servidor-debian (role base). Edições à mão são sobrescritas.
+Types: deb{{ ' deb-src' if base_fontes_codigo else '' }}
+URIs: http://deb.debian.org/debian/
+Suites: {{ base_codinome }}{% if base_codinome != 'sid' %} {{ base_codinome }}-updates{% endif %}
+
+Components: {{ base_componentes | join(' ') }}
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+{% if base_codinome != 'sid' %}
+
+Types: deb{{ ' deb-src' if base_fontes_codigo else '' }}
+URIs: http://security.debian.org/debian-security/
+Suites: {{ base_codinome }}-security
+Components: {{ base_componentes | join(' ') }}
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+{% endif %}

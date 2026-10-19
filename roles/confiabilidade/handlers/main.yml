@@ -1,0 +1,9 @@
+---
+- name: Reexecuta o systemd
+  ansible.builtin.systemd_service:
+    daemon_reexec: true
+
+- name: Atualiza o initramfs
+  ansible.builtin.command:
+    cmd: update-initramfs -u -k all
+  changed_when: true

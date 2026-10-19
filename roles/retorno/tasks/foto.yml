@@ -1,0 +1,15 @@
+---
+- name: Instala o script de retorno
+  ansible.builtin.copy:
+    src: servidor-debian-retorno
+    dest: /usr/local/sbin/servidor-debian-retorno
+    mode: "0755"
+
+- name: Define o nome da foto ({{ retorno_nome }})
+  ansible.builtin.set_fact:
+    retorno_foto: "{{ retorno_dir }}/{{ retorno_nome }}-{{ now(utc=true, fmt='%Y%m%dT%H%M%SZ') }}.tar.gz"
+
+- name: Tira a foto do estado atual ({{ retorno_nome }})
+  ansible.builtin.command:
+    argv: "{{ ['/usr/local/sbin/servidor-debian-retorno', 'foto', retorno_foto] + retorno_caminhos }}"
+  changed_when: false

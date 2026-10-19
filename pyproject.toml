@@ -1,0 +1,17 @@
+[project]
+name = "servidor-debian"
+version = "0.1.0"
+description = "Provisionamento Ansible para servidores Debian de uso geral"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ansible-core",
+    "ansible-lint",
+    "yamllint",
+    "pip-audit",
+]
+
+[tool.uv]
+package = false

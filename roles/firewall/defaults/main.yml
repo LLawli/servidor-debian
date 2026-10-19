@@ -1,0 +1,22 @@
+---
+# Política: entrada e repasse bloqueados; só passa o que uma zona libera.
+# Cada zona é uma interface:
+#   nome: lan                    # vira a chain zona_<nome>
+#   interface: wlp3s0
+#   origem: 192.168.1.0/24       # opcional: sem origem, aceita de qualquer endereço
+#   tcp: [22, 631]
+#   udp: []
+#   ping: true                   # padrão true, com limite de 5/s
+#   mdns: false                  # anúncios mDNS (Avahi)
+#   dhcp_cliente: true           # padrão true: respostas de DHCP e DHCPv6
+#   extra: ""                    # regras nft cruas dentro da chain da zona
+firewall_zonas: []
+
+# Regras nft cruas para casos que as zonas não cobrem (um AP isolado, NAT...).
+firewall_entrada_extra: ""
+firewall_repasse_extra: ""
+firewall_saida_extra: ""
+firewall_tabela_extra: ""
+
+firewall_porta_ssh: "{{ ansible_port | default(22) | int }}"
+firewall_retorno_segundos: 120

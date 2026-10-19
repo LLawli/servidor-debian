@@ -1,0 +1,7 @@
+---
+- name: Descarta a foto sem uso ({{ retorno_nome }})
+  ansible.builtin.file:
+    path: "{{ retorno_foto }}"
+    state: absent
+  # A foto foi tirada nesta mesma passada; apagá-la não muda nada no servidor.
+  changed_when: false

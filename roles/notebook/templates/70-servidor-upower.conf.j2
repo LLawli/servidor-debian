@@ -1,0 +1,7 @@
+# Gerado pelo servidor-debian (role notebook).
+[UPower]
+UsePercentageForPolicy=true
+PercentageLow={{ notebook_desligar_em + 10 }}.0
+PercentageCritical={{ notebook_desligar_em + 3 }}.0
+PercentageAction={{ notebook_desligar_em }}.0
+CriticalPowerAction=PowerOff

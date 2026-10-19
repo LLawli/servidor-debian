@@ -1,0 +1,26 @@
+---
+all:
+  hosts:
+    teste-container:
+      ansible_connection: containers.podman.podman
+      ansible_host: servidor-debian-teste
+      ansible_user: root
+      servidor_modulos: [base, confiabilidade, notebook, rede, firewall]
+      base_usuario_admin: root
+      base_chaves_ssh:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKbmQBcuTq2W2qEaP6Hnz8fGpZqnnTfGX9P2E5x0ZJ6q teste@servidor-debian
+      base_travar_kernel: true
+      rede_dns: [10.99.0.254]
+      rede_interfaces:
+        - nome: teste0
+          dhcp: false
+          endereco: 10.99.0.1/24
+      # Sem confirmação real por SSH no contêiner: o timer só precisa não disparar.
+      rede_retorno_segundos: 60
+      firewall_retorno_segundos: 60
+      firewall_zonas:
+        - nome: lan
+          interface: teste0
+          origem: 10.99.0.0/24
+          tcp: [22, 631]
+          mdns: true

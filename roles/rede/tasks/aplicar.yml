@@ -1,0 +1,180 @@
+---
+- name: Lista os serviços que precisam ficar ligados
+  ansible.builtin.set_fact:
+    rede_servicos_ligados: >-
+      {{ ['systemd-networkd.service', 'systemd-resolved.service']
+         + rede_interfaces | selectattr('wifi', 'defined') | map(attribute='nome')
+           | map('regex_replace', '^(.*)$', 'wpa_supplicant@\\1.service') | list }}
+
+- name: Instala o systemd-resolved e as ferramentas de Wi-Fi
+  ansible.builtin.apt:
+    name: "{{ ['systemd-resolved'] + (['wpasupplicant', 'iw'] if rede_interfaces | selectattr('wifi', 'defined') | list else []) }}"
+    state: present
+    install_recommends: false
+
+- name: Tira a foto da rede
+  ansible.builtin.include_role:
+    name: retorno
+    tasks_from: foto
+  vars:
+    retorno_nome: rede
+    retorno_caminhos: [etc/systemd/network, etc/systemd/system, etc/network, etc/wpa_supplicant]
+
+- name: Escreve as interfaces do systemd-networkd
+  ansible.builtin.template:
+    src: interface.network.j2
+    dest: /etc/systemd/network/20-{{ item.nome }}.network
+    mode: "0644"
+  loop: "{{ rede_interfaces }}"
+  loop_control:
+    label: "{{ item.nome }}"
+  register: rede_arquivos_network
+
+- name: Escreve a configuração do Wi-Fi
+  ansible.builtin.template:
+    src: wpa_supplicant.conf.j2
+    dest: /etc/wpa_supplicant/wpa_supplicant-{{ item.nome }}.conf
+    mode: "0600"
+  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.nome }}"
+  no_log: true
+  register: rede_arquivos_wifi
+
+- name: Cria o drop-in de economia de energia do Wi-Fi
+  ansible.builtin.file:
+    path: /etc/systemd/system/wpa_supplicant@{{ item.nome }}.service.d
+    state: directory
+    mode: "0755"
+  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | rejectattr('wifi.economia_energia', 'true') | list }}"
+  loop_control:
+    label: "{{ item.nome }}"
+
+- name: Desliga a economia de energia do Wi-Fi
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wpa_supplicant@{{ item.nome }}.service.d/10-powersave.conf
+    mode: "0644"
+    content: |
+      # Gerado pelo servidor-debian (role rede).
+      [Service]
+      ExecStartPost=-/usr/sbin/iw dev %i set power_save off
+  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | rejectattr('wifi.economia_energia', 'true') | list }}"
+  loop_control:
+    label: "{{ item.nome }}"
+  register: rede_arquivos_powersave
+  notify: Recarrega o systemd
+
+- name: Confere o estado dos serviços de rede
+  ansible.builtin.command: # noqa: command-instead-of-module (consulta só leitura; a unit pode não existir)
+    cmd: systemctl is-enabled {{ item }}
+  loop: "{{ rede_servicos_ligados + ['networking.service'] }}"
+  register: rede_servicos
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Decide se a rede muda
+  ansible.builtin.set_fact:
+    rede_mudou: >-
+      {{ rede_arquivos_network is changed
+         or rede_arquivos_wifi is changed
+         or rede_arquivos_powersave is changed
+         or (rede_servicos.results | selectattr('item', 'in', rede_servicos_ligados)
+             | rejectattr('stdout', 'equalto', 'enabled') | list | length > 0)
+         or (rede_aposentar_ifupdown
+             and rede_servicos.results | selectattr('item', 'equalto', 'networking.service')
+                 | selectattr('stdout', 'equalto', 'enabled') | list | length > 0) }}
+
+- name: Aplica a rede com retorno automático
+  when: rede_mudou | bool
+  block:
+    - name: Arma o retorno da rede
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: armar
+      vars:
+        retorno_nome: rede
+        retorno_segundos: "{{ rede_retorno_segundos }}"
+        retorno_caminhos: [etc/systemd/network, etc/systemd/system, etc/network, etc/wpa_supplicant]
+
+    - name: Recarrega o systemd antes de aplicar
+      ansible.builtin.meta: flush_handlers
+
+    - name: Instala o script de aplicação
+      ansible.builtin.template:
+        src: aplicar-rede.sh.j2
+        dest: /usr/local/sbin/servidor-debian-aplicar-rede
+        mode: "0755"
+
+    - name: Reinicia a rede, desacoplada do SSH
+      ansible.builtin.command:
+        cmd: /usr/local/sbin/servidor-debian-aplicar-rede
+      async: 120
+      poll: 0
+      changed_when: true
+      register: rede_aplicacao
+
+    - name: Confirma que o SSH voltou
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: confirmar
+      vars:
+        retorno_nome: rede
+        retorno_segundos: "{{ rede_retorno_segundos }}"
+
+    - name: Lê o resultado da aplicação
+      ansible.builtin.async_status:
+        jid: "{{ rede_aplicacao.ansible_job_id }}"
+      register: rede_resultado
+      until: rede_resultado.finished
+      retries: 30
+      delay: 2
+
+    - name: Confere que os serviços de rede subiram
+      ansible.builtin.command: # noqa: command-instead-of-module (consulta só leitura)
+        cmd: systemctl is-active {{ rede_servicos_ligados | join(' ') }}
+      changed_when: false
+
+    - name: Confere que nenhuma interface ficou em falha
+      ansible.builtin.command:
+        argv: "{{ ['networkctl', 'list', '--no-legend', '--no-pager'] + rede_interfaces | map(attribute='nome') | list }}"
+      register: rede_links
+      changed_when: false
+      failed_when: rede_links.rc != 0 or rede_links.stdout_lines | select('search', '\\sfailed\\s*$') | list | length > 0
+
+    - name: Confere que cada interface pegou o endereço
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, "{{ item.nome }}"]
+      loop: "{{ rede_interfaces }}"
+      loop_control:
+        label: "{{ item.nome }}: {{ item.endereco if not item.dhcp | default(true) else 'DHCP' }}"
+      register: rede_enderecos
+      changed_when: false
+      until: >-
+        (' inet ' ~ item.endereco ~ ' ') in rede_enderecos.stdout
+        if not item.dhcp | default(true) else ' inet ' in rede_enderecos.stdout
+      retries: "{{ rede_espera_endereco_segundos // 3 }}"
+      delay: 3
+
+    - name: Desarma o retorno da rede
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: desarmar
+      vars:
+        retorno_nome: rede
+  rescue:
+    - name: Mantém o retorno da rede armado
+      ansible.builtin.include_role:
+        name: retorno
+        tasks_from: falhou
+      vars:
+        retorno_nome: rede
+        retorno_segundos: "{{ rede_retorno_segundos }}"
+
+- name: Descarta a foto da rede sem mudança
+  ansible.builtin.include_role:
+    name: retorno
+    tasks_from: descartar
+  vars:
+    retorno_nome: rede
+  when: not rede_mudou | bool

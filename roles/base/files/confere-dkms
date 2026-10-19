@@ -1,0 +1,17 @@
+#!/bin/sh
+# Avisa quando algum módulo DKMS não tem build para um kernel instalado.
+# Roda depois de cada operação do dpkg (/etc/apt/apt.conf.d/90-confere-dkms).
+command -v dkms >/dev/null 2>&1 || exit 0
+modulos=$(dkms status 2>/dev/null | sed -n 's|^\([^/,]*\)/.*|\1|p' | sort -u)
+[ -n "$modulos" ] || exit 0
+for k in /lib/modules/*/; do
+    k=$(basename "$k")
+    [ -e "/boot/vmlinuz-$k" ] || continue
+    for m in $modulos; do
+        if ! dkms status -m "$m" -k "$k" 2>/dev/null | grep -q installed; then
+            echo "ATENÇÃO: módulo DKMS $m não instalado para o kernel $k." >&2
+            logger -t confere-dkms "módulo $m ausente para o kernel $k"
+        fi
+    done
+done
+exit 0

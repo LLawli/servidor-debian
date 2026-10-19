@@ -1,0 +1,15 @@
+---
+notebook_ignorar_tampa: true
+# Mascara sleep, suspend e hibernate: nada põe o servidor para dormir.
+notebook_sem_suspensao: true
+
+# Faixa de carga da bateria. Usa o limite do firmware
+# (charge_control_end_threshold) quando existe; senão alterna o modo de
+# conservação (charge_types Standard/Long_Life), como no Lenovo IdeaPad.
+notebook_bateria_limite: true
+notebook_bateria: BAT0
+notebook_bateria_min: 75
+notebook_bateria_max: 80
+
+# Desliga o servidor com esta carga, para o disco não cair sem energia.
+notebook_desligar_em: 5

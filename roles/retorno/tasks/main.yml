@@ -1,0 +1,5 @@
+---
+# Este role só é usado por include_role com tasks_from (foto, armar, confirmar, descartar).
+- name: Avisa como usar o role retorno
+  ansible.builtin.debug:
+    msg: "Use include_role com tasks_from: foto, armar, confirmar, desarmar, falhou ou descartar."

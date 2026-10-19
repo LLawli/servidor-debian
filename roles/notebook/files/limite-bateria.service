@@ -1,0 +1,6 @@
+[Unit]
+Description=Mantém a carga da bateria na faixa configurada
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/limite-bateria

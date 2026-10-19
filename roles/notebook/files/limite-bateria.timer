@@ -1,0 +1,9 @@
+[Unit]
+Description=Confere a carga da bateria a cada 2 minutos
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

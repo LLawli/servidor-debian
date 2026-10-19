@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Aplica site.yml a um servidor do inventário:
+#   bin/provisionar <nome> [opções do ansible-playbook]
+# Exemplos: bin/provisionar impressora --check --diff
+#           bin/provisionar impressora --tags firewall
+# Pede a senha do sudo do servidor (-K); ela não é gravada.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+nome=${1:?uso: bin/provisionar <nome> [opções do ansible-playbook]}
+shift
+[ -f "inventory/$nome.yml" ] || { echo "inventory/$nome.yml não existe; rode bin/novo-servidor antes." >&2; exit 1; }
+[ -d .ansible/collections/ansible_collections/ansible/posix ] \
+    || uv run ansible-galaxy collection install -r requirements.yml </dev/null 2>&1 | cat
+exec uv run ansible-playbook site.yml -l "$nome" -K "$@"

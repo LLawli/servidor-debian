@@ -1,0 +1,9 @@
+# Debian com systemd como PID 1, alvo do teste do site.yml.
+ARG CODINOME=forky
+FROM docker.io/library/debian:${CODINOME}
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends systemd systemd-sysv dbus python3 sudo openssh-server iproute2 \
+ && rm -rf /var/lib/apt/lists/*
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

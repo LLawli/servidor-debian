@@ -1,0 +1,9 @@
+# Gerado pelo servidor-debian (role rede). Edições à mão são sobrescritas.
+ctrl_interface=DIR=/run/wpa_supplicant GROUP=netdev
+update_config=0
+country={{ rede_pais_wifi }}
+
+network={
+    ssid="{{ item.wifi.ssid }}"
+    psk="{{ item.wifi.senha }}"
+}

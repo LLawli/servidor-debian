@@ -1,0 +1,15 @@
+---
+- name: Limpa um timer de retorno anterior ({{ retorno_nome }})
+  ansible.builtin.systemd_service:
+    name: servidor-debian-retorno-{{ retorno_nome }}.timer
+    state: stopped
+  changed_when: false
+  failed_when: false
+
+- name: Arma a restauração automática de {{ retorno_nome }}
+  ansible.builtin.command:
+    argv: >-
+      {{ ['systemd-run', '--collect', '--unit=servidor-debian-retorno-' ~ retorno_nome,
+          '--on-active=' ~ retorno_segundos ~ 's',
+          '/usr/local/sbin/servidor-debian-retorno', 'restaurar', retorno_foto] + retorno_caminhos }}
+  changed_when: true

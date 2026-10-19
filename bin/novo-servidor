@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Prepara um Debian recém-instalado para o provisionamento:
+#   bin/novo-servidor <nome> <ip> [usuario]
+# Copia sua chave SSH (pede a senha do usuário uma vez), detecta interface,
+# Wi-Fi, bateria, TPM e LUKS, e escreve inventory/<nome>.yml e host_vars/<nome>.yml.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+nome=${1:?uso: bin/novo-servidor <nome> <ip> [usuario]}
+ip=${2:?uso: bin/novo-servidor <nome> <ip> [usuario]}
+usuario=${3:-$USER}
+chave=${CHAVE_SSH:-$HOME/.ssh/id_ed25519.pub}
+inventario=inventory/$nome.yml
+vars=host_vars/$nome.yml
+
+[ -f "$chave" ] || { echo "Chave pública $chave não existe (defina CHAVE_SSH)." >&2; exit 1; }
+if [ -e "$vars" ]; then
+    echo "$vars já existe; apague-o para gerar de novo." >&2
+    exit 1
+fi
+
+alvo="$usuario@$ip"
+if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$alvo" true 2>/dev/null; then
+    echo "== Copiando $chave para $alvo (vai pedir a senha de $usuario)"
+    ssh-copy-id -i "$chave" "$alvo"
+fi
+
+echo "== Detectando o hardware de $alvo"
+# Saída em linhas chave=valor, lidas com segurança abaixo.
+deteccao=$(ssh -o BatchMode=yes "$alvo" 'sh -s' <<'REMOTO'
+iface=$(ip -4 route show default | awk '{for (i=1;i<NF;i++) if ($i=="dev") {print $(i+1); exit}}')
+echo "iface=$iface"
+echo "cidr=$(ip -4 -o addr show dev "$iface" | awk '{print $4; exit}')"
+echo "gateway=$(ip -4 route show default | awk '{print $3; exit}')"
+[ -d "/sys/class/net/$iface/wireless" ] && echo wifi=sim || echo wifi=nao
+ls -d /sys/class/power_supply/BAT* >/dev/null 2>&1 && echo "bateria=$(basename "$(ls -d /sys/class/power_supply/BAT* | head -1)")" || echo bateria=
+[ -e /dev/tpmrm0 ] && echo tpm=sim || echo tpm=nao
+grep -qvE '^\s*(#|$)' /etc/crypttab 2>/dev/null && echo luks=sim || echo luks=nao
+[ -e /dev/watchdog0 ] && echo watchdog=sim || echo watchdog=nao
+REMOTO
+)
+declare -A d
+while IFS='=' read -r k v; do d[$k]=$v; done <<<"$deteccao"
+
+iface=${d[iface]}
+[ -n "$iface" ] || { echo "Não achei a rota padrão em $alvo." >&2; exit 1; }
+rede=$(python3 -c 'import ipaddress,sys; print(ipaddress.ip_interface(sys.argv[1]).network)' "${d[cidr]}")
+
+printf '   interface %s (%s), rede %s, gateway %s\n' "$iface" "${d[wifi]/sim/Wi-Fi}" "$rede" "${d[gateway]}"
+printf '   bateria: %s  TPM2: %s  LUKS: %s  watchdog: %s\n' "${d[bateria]:-não}" "${d[tpm]}" "${d[luks]}" "${d[watchdog]}"
+
+ssid="" senha=""
+if [ "${d[wifi]}" = sim ]; then
+    read -rp "SSID do Wi-Fi em que $nome fica: " ssid
+    read -rsp "Senha do Wi-Fi $ssid: " senha
+    echo
+fi
+
+modulos="base, confiabilidade"
+[ -n "${d[bateria]}" ] && modulos="$modulos, notebook"
+modulos="$modulos, rede, firewall"
+tpm=false
+[ "${d[tpm]}" = sim ] && [ "${d[luks]}" = sim ] && tpm=true
+
+mkdir -p inventory host_vars
+cat >"$inventario" <<YAML
+---
+all:
+  hosts:
+    $nome:
+      ansible_host: $ip
+      ansible_user: $usuario
+YAML
+
+{
+    echo "---"
+    echo "# Gerado por bin/novo-servidor em $(date -I). Revise antes de provisionar."
+    echo "servidor_modulos: [$modulos]"
+    echo
+    echo "base_chaves_ssh:"
+    echo "  - \"$(cat "$chave")\""
+    echo
+    echo "confiabilidade_tpm: $tpm"
+    [ -n "${d[bateria]}" ] && { echo; echo "notebook_bateria: ${d[bateria]}"; }
+    echo
+    echo "rede_dns: [${d[gateway]}]"
+    echo "rede_interfaces:"
+    echo "  - nome: $iface"
+    echo "    dhcp: true"
+    echo "    identificador_dhcp: mac"
+    if [ -n "$ssid" ]; then
+        echo "    wifi:"
+        printf '      ssid: !unsafe %s\n' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$ssid")"
+        printf '      senha: !unsafe %s\n' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$senha")"
+    fi
+    echo
+    echo "firewall_zonas:"
+    echo "  - nome: lan"
+    echo "    interface: $iface"
+    echo "    origem: $rede"
+    echo "    tcp: [22]"
+} >"$vars"
+chmod 600 "$vars"
+
+echo "== Pronto: $inventario e $vars"
+echo "   Revise $vars e rode: bin/provisionar $nome --check --diff   (depois sem --check)"

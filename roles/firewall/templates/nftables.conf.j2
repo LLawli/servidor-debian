@@ -1,0 +1,66 @@
+#!/usr/sbin/nft -f
+# Gerado pelo servidor-debian (role firewall). Edições à mão são sobrescritas.
+flush ruleset
+
+table inet filtro {
+    chain entrada {
+        type filter hook input priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+        iif lo accept
+        ip protocol icmp icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+        ip6 nexthdr icmpv6 icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+{% for z in firewall_zonas %}
+        iifname "{{ z.interface }}" jump zona_{{ z.nome }}
+{% endfor %}
+{% if firewall_entrada_extra %}
+        {{ firewall_entrada_extra | trim | indent(8) }}
+{% endif %}
+    }
+{% for z in firewall_zonas %}
+{% set origem = ('ip saddr ' ~ z.origem ~ ' ') if z.origem is defined else '' %}
+
+    chain zona_{{ z.nome }} {
+{% if z.ping | default(true) %}
+        {{ origem }}icmp type echo-request limit rate 5/second accept
+{% if not origem %}
+        icmpv6 type echo-request limit rate 5/second accept
+{% endif %}
+{% endif %}
+{% if z.tcp | default([]) %}
+        {{ origem }}tcp dport { {{ z.tcp | join(', ') }} } accept
+{% endif %}
+{% if z.udp | default([]) %}
+        {{ origem }}udp dport { {{ z.udp | join(', ') }} } accept
+{% endif %}
+{% if z.mdns | default(false) %}
+        ip daddr 224.0.0.251 udp dport 5353 accept
+{% endif %}
+{% if z.dhcp_cliente | default(true) %}
+        udp sport 67 udp dport 68 accept
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept
+{% endif %}
+{% if z.extra | default('') %}
+        {{ z.extra | trim | indent(8) }}
+{% endif %}
+    }
+{% endfor %}
+
+    chain repasse {
+        type filter hook forward priority filter; policy drop;
+{% if firewall_repasse_extra %}
+        {{ firewall_repasse_extra | trim | indent(8) }}
+{% endif %}
+    }
+
+    chain saida {
+        type filter hook output priority filter; policy accept;
+{% if firewall_saida_extra %}
+        {{ firewall_saida_extra | trim | indent(8) }}
+{% endif %}
+    }
+{% if firewall_tabela_extra %}
+
+    {{ firewall_tabela_extra | trim | indent(4) }}
+{% endif %}
+}

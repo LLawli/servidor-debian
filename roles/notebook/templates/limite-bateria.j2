@@ -1,0 +1,28 @@
+#!/bin/sh
+# Gerado pelo servidor-debian (role notebook).
+# Mantém a carga da bateria entre {{ notebook_bateria_min }}% e {{ notebook_bateria_max }}%.
+MAX={{ notebook_bateria_max }}
+MIN={{ notebook_bateria_min }}
+B=/sys/class/power_supply/{{ notebook_bateria }}
+[ -d "$B" ] || exit 0
+
+if [ -w "$B/charge_control_end_threshold" ]; then
+    # Limite no firmware: só reafirma os valores, que alguns modelos zeram no boot.
+    # A ordem fim, início, fim cobre os dois sentidos da regra início < fim.
+    escreve() { [ -w "$B/$1" ] && [ "$(cat "$B/$1")" != "$2" ] && echo "$2" > "$B/$1" 2>/dev/null; }
+    escreve charge_control_end_threshold "$MAX"
+    escreve charge_control_start_threshold "$MIN"
+    escreve charge_control_end_threshold "$MAX"
+    exit 0
+fi
+
+[ -w "$B/charge_types" ] || exit 0
+cap=$(cat "$B/capacity")
+atual=$(sed -n 's/.*\[\(.*\)\].*/\1/p' "$B/charge_types")
+if [ "$cap" -ge "$MAX" ] && [ "$atual" != Long_Life ]; then
+    echo Long_Life > "$B/charge_types"
+    logger -t limite-bateria "carga ${cap}%: carregamento pausado"
+elif [ "$cap" -le "$MIN" ] && [ "$atual" != Standard ]; then
+    echo Standard > "$B/charge_types"
+    logger -t limite-bateria "carga ${cap}%: carregamento retomado"
+fi

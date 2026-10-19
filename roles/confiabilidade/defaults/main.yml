@@ -1,0 +1,20 @@
+---
+# Watchdog de hardware: o systemd o alimenta, e um travamento total reinicia a
+# máquina. Só é configurado se existir /dev/watchdog0.
+confiabilidade_watchdog: true
+confiabilidade_watchdog_runtime: 30s
+confiabilidade_watchdog_reboot: 2min
+
+# Kernel panic reinicia depois destes segundos (0 desliga).
+confiabilidade_panico_segundos: 10
+
+confiabilidade_alvo_padrao: multi-user.target
+
+# Desbloqueio do LUKS pelo TPM2 (clevis), sem digitar senha no boot. A senha
+# original continua num slot próprio. Na primeira vez, pede a senha atual.
+# Com o Secure Boot desligado, o PCR 7 protege pouco: o disco abre sozinho
+# em qualquer boot daquela máquina.
+confiabilidade_tpm: false
+confiabilidade_tpm_pcrs: "7"
+# Dispositivo LUKS; vazio usa a primeira linha do /etc/crypttab.
+confiabilidade_luks_dispositivo: ""

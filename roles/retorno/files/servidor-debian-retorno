@@ -1,0 +1,34 @@
+#!/bin/sh
+# Ponto de retorno das mudanças que podem derrubar o SSH (rede, firewall).
+#   servidor-debian-retorno foto <arquivo.tar.gz> <caminho>...
+#   servidor-debian-retorno restaurar <arquivo.tar.gz> <caminho>...
+# Os caminhos são relativos a /. "restaurar" apaga cada caminho, extrai a foto
+# e reinicia: o boot sobe a configuração antiga de forma consistente.
+set -eu
+acao=$1
+foto=$2
+shift 2
+cd /
+case "$acao" in
+foto)
+    mkdir -p "$(dirname "$foto")"
+    existentes=""
+    for p in "$@"; do
+        [ -e "$p" ] && existentes="$existentes $p"
+    done
+    # shellcheck disable=SC2086
+    tar -czpf "$foto" --files-from /dev/null $existentes
+    ;;
+restaurar)
+    logger -t servidor-debian "sem confirmação: restaurando $foto e reiniciando"
+    for p in "$@"; do
+        rm -rf "${p:?}"
+    done
+    tar -xzpf "$foto" -C /
+    systemctl reboot
+    ;;
+*)
+    echo "uso: $0 foto|restaurar <arquivo> <caminho>..." >&2
+    exit 2
+    ;;
+esac

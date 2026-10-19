@@ -1,0 +1,13 @@
+#!/bin/sh
+# Gerado pelo servidor-debian (role rede). Roda desacoplado do SSH, que pode cair no meio.
+{% if rede_aposentar_ifupdown %}
+if systemctl is-enabled -q networking.service 2>/dev/null; then
+    systemctl disable --now networking.service
+fi
+{% endif %}
+systemctl enable systemd-networkd.service systemd-resolved.service
+{% for i in rede_interfaces if i.wifi is defined %}
+systemctl enable wpa_supplicant@{{ i.nome }}.service
+systemctl restart wpa_supplicant@{{ i.nome }}.service
+{% endfor %}
+systemctl restart systemd-networkd.service systemd-resolved.service

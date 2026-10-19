@@ -1,0 +1,27 @@
+---
+# Usuário que administra o servidor: recebe as chaves e entra no grupo sudo.
+base_usuario_admin: "{{ ansible_user | default(lookup('ansible.builtin.env', 'USER')) }}"
+
+# Chaves públicas autorizadas para o usuário admin (texto da chave).
+# Com a lista vazia, as chaves que já estão no servidor continuam valendo.
+base_chaves_ssh: []
+
+base_ssh_sem_senha: true
+base_ssh_sem_root: true
+
+# Fontes do apt fixas no codinome (forky, trixie...), nunca em "testing" ou
+# "stable": o servidor não muda de versão sozinho quando sai um lançamento.
+base_codinome: "{{ ansible_facts.distribution_release }}"
+base_componentes: [main, non-free-firmware]
+base_fontes_codigo: false
+
+base_pacotes: [sudo, ca-certificates, curl, less, iproute2]
+base_pacotes_extras: []
+
+# Trava o metapacote do kernel (apt-mark hold), para um driver fora da árvore
+# (DKMS) não quebrar com um kernel novo. As atualizações do mesmo kernel entram.
+base_travar_kernel: false
+
+# Depois de cada dpkg, avisa se algum módulo DKMS ficou sem build para um
+# kernel instalado.
+base_conferir_dkms: true

@@ -1,0 +1,67 @@
+---
+- name: Confere se há TPM2
+  ansible.builtin.stat:
+    path: /dev/tpmrm0
+  register: confiabilidade_dev_tpm
+
+- name: Recusa sem TPM2
+  ansible.builtin.assert:
+    that: confiabilidade_dev_tpm.stat.exists
+    fail_msg: "{{ inventory_hostname }} não tem /dev/tpmrm0; ligue o TPM na BIOS ou use confiabilidade_tpm: false."
+    quiet: true
+
+- name: Instala o clevis
+  ansible.builtin.apt:
+    name: [clevis, clevis-luks, clevis-tpm2, clevis-initramfs, tpm2-tools]
+    state: present
+    install_recommends: false
+  notify: Atualiza o initramfs
+
+- name: Lê o crypttab
+  ansible.builtin.slurp:
+    src: /etc/crypttab
+  register: confiabilidade_crypttab
+  when: not confiabilidade_luks_dispositivo
+
+- name: Escolhe o dispositivo LUKS
+  ansible.builtin.set_fact:
+    confiabilidade_luks: >-
+      {{ confiabilidade_luks_dispositivo
+         or ((confiabilidade_crypttab.content | b64decode).splitlines()
+             | reject('match', '^\s*(#|$)') | first).split()[1]
+            | regex_replace('^UUID=', '/dev/disk/by-uuid/') }}
+
+- name: Confere se o LUKS já tem slot do TPM2
+  ansible.builtin.command:
+    cmd: clevis luks list -d {{ confiabilidade_luks }}
+  register: confiabilidade_clevis
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Liga o LUKS ao TPM2
+  when: "'tpm2' not in confiabilidade_clevis.stdout and not ansible_check_mode"
+  block:
+    - name: Pede a senha atual do LUKS
+      ansible.builtin.pause:
+        prompt: "Senha atual do LUKS em {{ confiabilidade_luks }} ({{ inventory_hostname }})"
+        echo: false
+      register: confiabilidade_senha
+
+    - name: Grava o slot do TPM2 (PCRs {{ confiabilidade_tpm_pcrs }})
+      ansible.builtin.command:
+        argv:
+          - clevis
+          - luks
+          - bind
+          - -y
+          - -d
+          - "{{ confiabilidade_luks }}"
+          - -k
+          - "-"
+          - tpm2
+          - '{"pcr_bank":"sha256","pcr_ids":"{{ confiabilidade_tpm_pcrs }}"}'
+        stdin: "{{ confiabilidade_senha.user_input }}"
+      no_log: true
+      changed_when: true
+      notify: Atualiza o initramfs

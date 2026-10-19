@@ -1,0 +1,28 @@
+---
+# Os módulos que podem derrubar o SSH (rede e firewall) vêm por último,
+# depois de instalados todos os pacotes.
+- name: Provisiona servidores Debian
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Confere que o alvo é Debian
+      ansible.builtin.assert:
+        that: ansible_facts.distribution == 'Debian'
+        fail_msg: "{{ inventory_hostname }} roda {{ ansible_facts.distribution }}; este projeto só cobre Debian."
+        quiet: true
+  roles:
+    - role: base
+      tags: [base]
+      when: "'base' in servidor_modulos"
+    - role: confiabilidade
+      tags: [confiabilidade]
+      when: "'confiabilidade' in servidor_modulos"
+    - role: notebook
+      tags: [notebook]
+      when: "'notebook' in servidor_modulos"
+    - role: rede
+      tags: [rede]
+      when: "'rede' in servidor_modulos"
+    - role: firewall
+      tags: [firewall]
+      when: "'firewall' in servidor_modulos"

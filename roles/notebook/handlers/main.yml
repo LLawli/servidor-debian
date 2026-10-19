@@ -1,0 +1,10 @@
+---
+- name: Reinicia o logind
+  ansible.builtin.systemd_service:
+    name: systemd-logind
+    state: restarted
+
+- name: Reinicia o upower
+  ansible.builtin.systemd_service:
+    name: upower
+    state: restarted

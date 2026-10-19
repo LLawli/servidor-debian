@@ -1,0 +1,4 @@
+---
+- name: Configura a rede
+  ansible.builtin.include_tasks: aplicar.yml
+  when: rede_interfaces | length > 0

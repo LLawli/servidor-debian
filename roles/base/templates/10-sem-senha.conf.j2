@@ -1,0 +1,8 @@
+# Gerado pelo servidor-debian (role base). Edições à mão são sobrescritas.
+{% if base_ssh_sem_senha %}
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+{% endif %}
+{% if base_ssh_sem_root %}
+PermitRootLogin no
+{% endif %}

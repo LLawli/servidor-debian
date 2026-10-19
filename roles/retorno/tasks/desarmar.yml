@@ -1,0 +1,5 @@
+---
+- name: Desarma a restauração automática ({{ retorno_nome }})
+  ansible.builtin.systemd_service:
+    name: servidor-debian-retorno-{{ retorno_nome }}.timer
+    state: stopped

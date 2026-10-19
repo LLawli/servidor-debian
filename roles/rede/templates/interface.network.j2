@@ -1,0 +1,33 @@
+# Gerado pelo servidor-debian (role rede). Edições à mão são sobrescritas.
+{% set dns = item.dns | default(rede_dns) %}
+{% set dhcp = item.dhcp | default(true) %}
+[Match]
+Name={{ item.nome }}
+
+[Network]
+{% if dhcp %}
+DHCP=yes
+{% else %}
+Address={{ item.endereco }}
+{% if item.gateway is defined %}
+Gateway={{ item.gateway }}
+{% endif %}
+{% endif %}
+{% for d in dns %}
+DNS={{ d }}
+{% endfor %}
+{% if dhcp %}
+
+[DHCPv4]
+ClientIdentifier={{ item.identificador_dhcp | default('mac') }}
+{% if dns %}
+UseDNS=no
+UseDomains=no
+
+[DHCPv6]
+UseDNS=no
+
+[IPv6AcceptRA]
+UseDNS=no
+{% endif %}
+{% endif %}

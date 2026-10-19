@@ -1,0 +1,49 @@
+---
+- name: Confere se há watchdog de hardware
+  ansible.builtin.stat:
+    path: /dev/watchdog0
+  register: confiabilidade_dev_watchdog
+
+- name: Cria o drop-in do systemd
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    mode: "0755"
+  when: confiabilidade_watchdog and confiabilidade_dev_watchdog.stat.exists
+
+- name: Liga o watchdog de hardware
+  ansible.builtin.copy:
+    dest: /etc/systemd/system.conf.d/10-watchdog.conf
+    mode: "0644"
+    content: |
+      # Gerado pelo servidor-debian (role confiabilidade).
+      [Manager]
+      RuntimeWatchdogSec={{ confiabilidade_watchdog_runtime }}
+      RebootWatchdogSec={{ confiabilidade_watchdog_reboot }}
+  when: confiabilidade_watchdog and confiabilidade_dev_watchdog.stat.exists
+  notify: Reexecuta o systemd
+
+- name: Reinicia depois de um kernel panic
+  ansible.posix.sysctl:
+    name: kernel.panic
+    value: "{{ confiabilidade_panico_segundos }}"
+    sysctl_file: /etc/sysctl.d/90-servidor.conf
+    sysctl_set: "{{ not servidor_em_container }}"
+    reload: "{{ not servidor_em_container }}"
+
+- name: Lê o alvo de boot
+  ansible.builtin.command:
+    cmd: systemctl get-default
+  register: confiabilidade_alvo
+  changed_when: false
+  check_mode: false
+
+- name: Fixa o alvo de boot em {{ confiabilidade_alvo_padrao }}
+  ansible.builtin.command:
+    cmd: systemctl set-default {{ confiabilidade_alvo_padrao }}
+  when: confiabilidade_alvo.stdout != confiabilidade_alvo_padrao
+  changed_when: true
+
+- name: Desbloqueia o LUKS pelo TPM2
+  ansible.builtin.include_tasks: tpm.yml
+  when: confiabilidade_tpm and not servidor_em_container

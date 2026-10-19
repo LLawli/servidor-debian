@@ -1,0 +1,26 @@
+---
+# Interfaces gerenciadas pelo systemd-networkd. Lista vazia: o role não mexe na rede.
+# Cada item:
+#   nome: wlp3s0                 # obrigatório
+#   dhcp: true                   # padrão true; com false, use endereco e gateway
+#   endereco: 192.168.1.72/24
+#   gateway: 192.168.1.1
+#   identificador_dhcp: mac      # "mac" casa com reserva por MAC no roteador; ou "duid"
+#   dns: [192.168.1.1]           # sobrescreve rede_dns nesta interface
+#   wifi:                        # só para Wi-Fi (wpa_supplicant@<nome>)
+#     ssid: MinhaRede
+#     senha: "..."               # guarde em host_vars, que fica fora do git
+#     economia_energia: false    # padrão false: power_save derruba servidor em Wi-Fi
+rede_interfaces: []
+
+# DNS fixo para todas as interfaces. Vazio: usa o que o DHCP entregar.
+rede_dns: []
+
+rede_pais_wifi: BR
+
+# Desliga o ifupdown (networking.service) que o instalador do Debian deixa ligado.
+rede_aposentar_ifupdown: true
+
+rede_retorno_segundos: 120
+# Quanto esperar cada interface pegar endereço (o Wi-Fi leva alguns segundos para associar).
+rede_espera_endereco_segundos: 45

@@ -1,0 +1,8 @@
+---
+# Nome do ponto de retorno (vira o nome do timer e da foto).
+retorno_nome: geral
+# Caminhos, relativos a /, guardados na foto e restaurados se a confirmação não chegar.
+retorno_caminhos: []
+# Tempo para uma conexão SSH nova entrar antes da restauração automática.
+retorno_segundos: 120
+retorno_dir: /var/backups/servidor-debian

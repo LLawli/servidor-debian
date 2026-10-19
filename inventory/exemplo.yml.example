@@ -1,0 +1,8 @@
+---
+# Um arquivo por servidor: inventory/<nome>.yml (fica fora do git).
+# O bin/novo-servidor cria este arquivo sozinho.
+all:
+  hosts:
+    exemplo:
+      ansible_host: 192.168.1.50
+      ansible_user: developer
