@@ -46,9 +46,10 @@
     path: /etc/systemd/system/wpa_supplicant@{{ item.nome }}.service.d
     state: directory
     mode: "0755"
-  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | rejectattr('wifi.economia_energia', 'true') | list }}"
+  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | list }}"
   loop_control:
     label: "{{ item.nome }}"
+  when: not item.wifi.economia_energia | default(false)
 
 - name: Desliga a economia de energia do Wi-Fi
   ansible.builtin.copy:
@@ -58,9 +59,10 @@
       # Gerado pelo servidor-debian (role rede).
       [Service]
       ExecStartPost=-/usr/sbin/iw dev %i set power_save off
-  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | rejectattr('wifi.economia_energia', 'true') | list }}"
+  loop: "{{ rede_interfaces | selectattr('wifi', 'defined') | list }}"
   loop_control:
     label: "{{ item.nome }}"
+  when: not item.wifi.economia_energia | default(false)
   register: rede_arquivos_powersave
   notify: Recarrega o systemd
 

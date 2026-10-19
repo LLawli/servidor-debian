@@ -19,8 +19,10 @@ podman run -d --name "$nome" --systemd=always --cap-add NET_ADMIN --cap-add NET_
 podman exec "$nome" timeout 60 systemctl is-system-running --wait >/dev/null 2>&1 || true
 podman exec "$nome" ip link add teste0 type dummy
 
+# Quem decide se passou é o PLAY RECAP, conferido depois: o código de saída do
+# ansible-playbook não pode encerrar o script (set -e) antes do diagnóstico.
 playbook() {
-    uv run ansible-playbook -i tests/container/inventario.yml site.yml "$@" </dev/null 2>&1 | cat
+    uv run ansible-playbook -i tests/container/inventario.yml site.yml "$@" </dev/null 2>&1 | cat || true
 }
 
 echo "== simulação (--check) num servidor zerado"
@@ -33,6 +35,14 @@ for f in /etc/systemd/network/20-teste0.network /etc/ssh/sshd_config.d/10-sem-se
         exit 1
     fi
 done
+
+echo "== simulação (--check) com Wi-Fi"
+# Não há rádio no contêiner: o --check percorre os templates e as condições do
+# caminho Wi-Fi sem precisar subir o wpa_supplicant.
+playbook --check --tags rede -e @tests/container/wifi.yml | tee "$log/0w.txt" | tail -n 4
+grep -qE 'teste-container +: ok=[0-9]+ +changed=[1-9][0-9]* +unreachable=0 +failed=0' "$log/0w.txt" \
+    || { echo "FALHOU: o --check com Wi-Fi quebrou" >&2; grep -B2 -A12 -E '^\[ERROR\]|^fatal' "$log/0w.txt" >&2; exit 1; }
+grep -q 'wlteste0' "$log/0w.txt" || { echo "FALHOU: o --check com Wi-Fi não passou pela interface Wi-Fi" >&2; exit 1; }
 
 echo "== primeira passada"
 playbook | tee "$log/1.txt" | tail -n 4

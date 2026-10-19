@@ -1,0 +1,16 @@
+---
+# Variáveis extras da simulação com Wi-Fi: uma interface com economia_energia
+# omitida (o padrão) e outra com ela ligada, cobrindo os dois lados da condição.
+rede_interfaces:
+  - nome: wlteste0
+    dhcp: false
+    endereco: 10.99.1.1/24
+    gateway: 10.99.1.254
+    wifi:
+      ssid: RedeTeste
+      senha: senha-de-teste
+  - nome: wlteste1
+    wifi:
+      ssid: OutraRede
+      senha: outra-senha
+      economia_energia: true

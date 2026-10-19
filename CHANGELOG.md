@@ -21,3 +21,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - `--check` num servidor recém-instalado: instala o `python3-apt` antes de tudo e
   não tenta ligar units nem reiniciar serviços que só existiriam depois de aplicar.
   O teste em contêiner agora roda uma simulação antes da primeira passada.
+- Interface Wi-Fi sem `economia_energia` no `host_vars` quebrava o role `rede`
+  (`object of type 'dict' has no attribute 'economia_energia'`). O teste ganhou
+  uma simulação com Wi-Fi, e um playbook que falha agora mostra o erro em vez de
+  encerrar o teste calado.
