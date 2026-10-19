@@ -20,8 +20,19 @@ podman exec "$nome" timeout 60 systemctl is-system-running --wait >/dev/null 2>&
 podman exec "$nome" ip link add teste0 type dummy
 
 playbook() {
-    uv run ansible-playbook -i tests/container/inventario.yml site.yml </dev/null 2>&1 | cat
+    uv run ansible-playbook -i tests/container/inventario.yml site.yml "$@" </dev/null 2>&1 | cat
 }
+
+echo "== simulação (--check) num servidor zerado"
+playbook --check --diff | tee "$log/0.txt" | tail -n 4
+grep -qE 'teste-container +: ok=[0-9]+ +changed=[1-9][0-9]* +unreachable=0 +failed=0' "$log/0.txt" \
+    || { echo "FALHOU: o --check quebrou ou não previu mudança" >&2; grep -A8 -E '^fatal' "$log/0.txt" >&2; exit 1; }
+for f in /etc/systemd/network/20-teste0.network /etc/ssh/sshd_config.d/10-sem-senha.conf /usr/local/sbin/confere-dkms /usr/local/sbin/limite-bateria; do
+    if podman exec "$nome" test -e "$f"; then
+        echo "FALHOU: o --check escreveu $f" >&2
+        exit 1
+    fi
+done
 
 echo "== primeira passada"
 playbook | tee "$log/1.txt" | tail -n 4

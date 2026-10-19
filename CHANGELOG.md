@@ -15,3 +15,9 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - `bin/provisionar`, atalho para aplicar o `site.yml` a um servidor.
 - Guia da instalação do Debian esperada (UEFI, LUKS com LVM, btrfs, tasksel).
 - `scripts/ci.sh` com todos os portões e teste num Debian com systemd em Podman.
+
+### Corrigido
+
+- `--check` num servidor recém-instalado: instala o `python3-apt` antes de tudo e
+  não tenta ligar units nem reiniciar serviços que só existiriam depois de aplicar.
+  O teste em contêiner agora roda uma simulação antes da primeira passada.

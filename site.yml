@@ -10,6 +10,16 @@
         that: ansible_facts.distribution == 'Debian'
         fail_msg: "{{ inventory_hostname }} roda {{ ansible_facts.distribution }}; este projeto só cobre Debian."
         quiet: true
+
+    # O módulo apt precisa do python3-apt até para simular (--check), e um Debian
+    # mínimo pode não ter. É ferramenta do Ansible, não configuração do servidor.
+    - name: Instala o python3-apt
+      ansible.builtin.shell: # noqa: command-instead-of-module (o módulo apt depende deste pacote)
+        cmd: >-
+          apt-get install -y --no-install-recommends python3-apt
+          || { apt-get update && apt-get install -y --no-install-recommends python3-apt; }
+        creates: /usr/lib/python3/dist-packages/apt_pkg*.so
+      check_mode: false
   roles:
     - role: base
       tags: [base]

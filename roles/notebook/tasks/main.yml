@@ -26,6 +26,7 @@
     name: upower
     state: present
     install_recommends: false
+  register: notebook_upower
 
 - name: Cria o drop-in do upower
   ansible.builtin.file:
@@ -54,6 +55,7 @@
     mode: "0644"
   loop: [limite-bateria.service, limite-bateria.timer]
   when: notebook_bateria_limite
+  register: notebook_units
 
 - name: Liga o limitador de carga
   ansible.builtin.systemd_service:
@@ -61,4 +63,5 @@
     enabled: true
     state: started
     daemon_reload: true
-  when: notebook_bateria_limite
+  # No --check as units ainda não foram copiadas de verdade.
+  when: notebook_bateria_limite and not (ansible_check_mode and notebook_units is changed)

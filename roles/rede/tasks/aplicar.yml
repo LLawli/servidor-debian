@@ -85,8 +85,13 @@
              and rede_servicos.results | selectattr('item', 'equalto', 'networking.service')
                  | selectattr('stdout', 'equalto', 'enabled') | list | length > 0) }}
 
+- name: Avisa que a rede seria aplicada (--check)
+  ansible.builtin.debug:
+    msg: "A rede mudaria: aplicaria com retorno automático em {{ rede_retorno_segundos }}s."
+  when: rede_mudou | bool and ansible_check_mode
+
 - name: Aplica a rede com retorno automático
-  when: rede_mudou | bool
+  when: rede_mudou | bool and not ansible_check_mode
   block:
     - name: Arma o retorno da rede
       ansible.builtin.include_role:

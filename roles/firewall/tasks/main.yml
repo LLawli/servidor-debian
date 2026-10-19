@@ -39,8 +39,13 @@
   failed_when: false
   check_mode: false
 
+- name: Avisa que o firewall seria aplicado (--check)
+  ansible.builtin.debug:
+    msg: "O firewall mudaria: aplicaria com retorno automático em {{ firewall_retorno_segundos }}s."
+  when: (firewall_regras is changed or firewall_servico.stdout != 'enabled') and ansible_check_mode
+
 - name: Aplica o firewall com retorno automático
-  when: firewall_regras is changed or firewall_servico.stdout != 'enabled'
+  when: (firewall_regras is changed or firewall_servico.stdout != 'enabled') and not ansible_check_mode
   block:
     - name: Arma o retorno do firewall
       ansible.builtin.include_role:
