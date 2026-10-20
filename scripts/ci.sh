@@ -11,11 +11,9 @@ echo "== formato (yamllint)"
 uv run yamllint --strict .
 
 echo "== shellcheck"
-if command -v shellcheck >/dev/null 2>&1 && shellcheck --version >/dev/null 2>&1; then
-    shellcheck() { command shellcheck "$@"; }
-else
-    shellcheck() { docker run --rm -v "$PWD:/mnt:ro" -w /mnt docker.io/koalaman/shellcheck:v0.11.0 "$@"; }
-fi
+# Sempre a versão fixada: o runner do CI traz um shellcheck mais antigo, que
+# acusa coisas que a 0.11 não acusa (e vice-versa).
+shellcheck() { docker run --rm -v "$PWD:/mnt:ro" -w /mnt docker.io/koalaman/shellcheck:v0.11.0 "$@"; }
 shellcheck bin/* scripts/*.sh tests/*/*.sh roles/*/files/servidor-debian-retorno roles/base/files/confere-dkms \
     roles/secure_boot/files/servidor-uki
 # O console da VM de teste (Python, só biblioteca padrão) precisa ao menos compilar.

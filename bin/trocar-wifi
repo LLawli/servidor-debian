@@ -18,7 +18,10 @@ read -rp "SSID da rede nova: " ssid
 [ -n "$ssid" ] || { echo "SSID vazio." >&2; exit 1; }
 read -rsp "Senha do Wi-Fi $ssid: " senha
 echo
-[ "${#senha}" -ge 8 ] && [ "${#senha}" -le 63 ] || { echo "Uma senha WPA tem de 8 a 63 caracteres." >&2; exit 1; }
+if [ "${#senha}" -lt 8 ] || [ "${#senha}" -gt 63 ]; then
+    echo "Uma senha WPA tem de 8 a 63 caracteres." >&2
+    exit 1
+fi
 
 # Os valores vão pelo ambiente (não aparecem na lista de processos) e entram
 # como strings JSON marcadas !unsafe: aspas, chaves e % chegam intactos.
