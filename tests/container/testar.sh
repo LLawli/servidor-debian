@@ -43,6 +43,9 @@ playbook --check --tags rede -e @tests/container/wifi.yml | tee "$log/0w.txt" | 
 grep -qE 'teste-container +: ok=[0-9]+ +changed=[1-9][0-9]* +unreachable=0 +failed=0' "$log/0w.txt" \
     || { echo "FALHOU: o --check com Wi-Fi quebrou" >&2; grep -B2 -A12 -E '^\[ERROR\]|^fatal' "$log/0w.txt" >&2; exit 1; }
 grep -q 'wlteste0' "$log/0w.txt" || { echo "FALHOU: o --check com Wi-Fi não passou pela interface Wi-Fi" >&2; exit 1; }
+# O nome da unit sai de um regex_replace; um \1 sem substituir passaria batido.
+grep -q 'wpa_supplicant@wlteste0.service' "$log/0w.txt" \
+    || { echo "FALHOU: o nome do serviço do Wi-Fi saiu errado" >&2; grep 'wpa_supplicant@' "$log/0w.txt" >&2; exit 1; }
 
 echo "== primeira passada"
 playbook | tee "$log/1.txt" | tail -n 4

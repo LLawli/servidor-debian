@@ -32,3 +32,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   (`object of type 'dict' has no attribute 'economia_energia'`). O teste ganhou
   uma simulação com Wi-Fi, e um playbook que falha agora mostra o erro em vez de
   encerrar o teste calado.
+- O role `rede` montava o nome do serviço do Wi-Fi como `wpa_supplicant@\1.service`
+  (o grupo do `regex_replace` não era substituído), então achava que a rede tinha
+  mudado e a reaplicava em toda passada. A conferência dos serviços também deixava
+  passar um serviço parado: `systemctl is-active` com várias units sai com 0 se uma
+  só estiver ativa. Agora cada unit é conferida pela sua linha.

@@ -4,7 +4,7 @@
     rede_servicos_ligados: >-
       {{ ['systemd-networkd.service', 'systemd-resolved.service']
          + rede_interfaces | selectattr('wifi', 'defined') | map(attribute='nome')
-           | map('regex_replace', '^(.*)$', 'wpa_supplicant@\\1.service') | list }}
+           | map('regex_replace', '^', 'wpa_supplicant@') | map('regex_replace', '$', '.service') | list }}
 
 - name: Instala o systemd-resolved e as ferramentas de Wi-Fi
   ansible.builtin.apt:
@@ -137,10 +137,16 @@
       retries: 30
       delay: 2
 
+    # Com várias units, systemctl is-active sai com 0 se uma só estiver ativa:
+    # quem decide é a linha de cada uma.
     - name: Confere que os serviços de rede subiram
       ansible.builtin.command: # noqa: command-instead-of-module (consulta só leitura)
-        cmd: systemctl is-active {{ rede_servicos_ligados | join(' ') }}
+        argv: "{{ ['systemctl', 'is-active'] + rede_servicos_ligados }}"
+      register: rede_ativos
       changed_when: false
+      failed_when: >-
+        rede_ativos.stdout_lines | length != rede_servicos_ligados | length
+        or rede_ativos.stdout_lines | reject('equalto', 'active') | list | length > 0
 
     - name: Confere que nenhuma interface ficou em falha
       ansible.builtin.command:
