@@ -19,7 +19,7 @@ Sequência em `rede` e `firewall`:
 1. `foto`: tar dos caminhos que o role pode mudar (inclui `/etc/systemd/system`,
    para restaurar também quais units estão ligadas).
 2. Escreve os arquivos. Se nada mudou, `descartar` e fim.
-3. `armar`: `systemd-run --on-active=120s servidor-debian-retorno restaurar ...`,
+3. `armar`: `systemd-run --on-active=<prazo>s servidor-debian-retorno restaurar ...`,
    um timer transitório que, se disparar, apaga os caminhos, extrai a foto e
    reinicia. Reiniciar (em vez de reiniciar serviços) garante que o boot suba
    uma configuração coerente, inclusive com ifupdown de volta.
@@ -36,6 +36,15 @@ Sequência em `rede` e `firewall`:
 A conferência de endereço existe porque o networkd ignora em silêncio uma linha
 `Address=` inválida: o serviço fica ativo, a interface não entra em `failed`, e
 só falta o IP.
+
+O prazo da rede é 300s, e não os 120s do firewall, por causa de um caso medido:
+um servidor que passou de um nó da mesh (EV-IoT) para o AP do roteador da
+operadora (EV-Equipe) ficou 2,5 minutos inalcançável pelo cabo. O Wi-Fi
+associava, o servidor alcançava o gateway e os clientes do mesmo AP, e o ARP
+unicast vindo do cabo chegava; só o IPv4 vindo do cabo morria no roteador
+(contadores do `/proc/net/snmp` parados durante rajadas UDP marcadas), até que
+o cache de encaminhamento dele expirou. Com 120s, o retorno desfazia uma troca
+que estava certa. Reabrir se aparecer um roteador que demore mais que isso.
 
 ## Decisões
 

@@ -2,7 +2,7 @@
 # Troca a rede Wi-Fi de um servidor já cadastrado:
 #   bin/trocar-wifi <nome> [opções do ansible-playbook]
 # Pergunta o SSID e a senha, grava no host_vars/<nome>.yml e aplica só a rede.
-# Se o SSH não entrar pela rede nova em 2 minutos, o servidor volta sozinho
+# Se o SSH não entrar pela rede nova em 5 minutos, o servidor volta sozinho
 # para a anterior. Só cobre redes WPA com senha e servidores com uma interface
 # Wi-Fi; para o resto, edite o host_vars.
 set -euo pipefail

@@ -102,7 +102,9 @@ bin/trocar-wifi <nome>
 ```
 
 Pergunta o SSID e a senha, grava no `host_vars` e aplica só a rede. Se o SSH não
-entrar pela rede nova em 2 minutos, o servidor volta sozinho para a anterior.
+entrar pela rede nova em 5 minutos, o servidor volta sozinho para a anterior.
+Alguns roteadores levam uns minutos para alcançar pelo cabo um servidor que
+acabou de trocar de AP; a espera cobre isso.
 Para trocar também o IP estático, mude `endereco` no `host_vars` antes: a
 passada segue o servidor até o endereço novo.
 
@@ -154,7 +156,8 @@ senha, e rodar o provisionar de novo refaz o slot.
 ## Se a rede ou o firewall der errado
 
 Antes de mexer na rede ou no firewall, o playbook tira uma foto da
-configuração e arma um timer: se em 2 minutos uma conexão SSH nova não entrar
+configuração e arma um timer: se no prazo (5 minutos na rede, 2 no firewall)
+uma conexão SSH nova não entrar
 e a conferência não passar, o servidor restaura a foto e reinicia sozinho. Um
 firewall que não libera a porta do SSH é recusado antes de ser aplicado. As
 fotos ficam em `/var/backups/servidor-debian/`.

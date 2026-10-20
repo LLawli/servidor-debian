@@ -21,6 +21,9 @@ rede_pais_wifi: BR
 # Desliga o ifupdown (networking.service) que o instalador do Debian deixa ligado.
 rede_aposentar_ifupdown: true
 
-rede_retorno_segundos: 120
+# Prazo para uma conexão SSH nova entrar depois de aplicar a rede. Ao trocar de
+# AP, um roteador com cache de encaminhamento pode levar alguns minutos para
+# entregar o tráfego do cabo no lugar novo (medido: 2,5 min).
+rede_retorno_segundos: 300
 # Quanto esperar cada interface pegar endereço (o Wi-Fi leva alguns segundos para associar).
 rede_espera_endereco_segundos: 45

@@ -9,7 +9,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - Módulos `base`, `confiabilidade`, `notebook`, `rede` e `firewall`, ligados por
   servidor em `servidor_modulos`.
 - Ponto de retorno para rede e firewall: foto da configuração, restauração e
-  reinício automáticos se uma conexão SSH nova não entrar em 2 minutos.
+  reinício automáticos se uma conexão SSH nova não entrar no prazo (5 minutos
+  na rede, 2 no firewall).
 - `bin/novo-servidor`, que copia a chave SSH, detecta o hardware e gera o
   inventário e o `host_vars` do servidor.
 - `bin/provisionar`, atalho para aplicar o `site.yml` a um servidor.
@@ -42,3 +43,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
   mudado e a reaplicava em toda passada. A conferência dos serviços também deixava
   passar um serviço parado: `systemctl is-active` com várias units sai com 0 se uma
   só estiver ativa. Agora cada unit é conferida pela sua linha.
+- Trocar o servidor de AP (por exemplo, de rede Wi-Fi) era desfeito pelo retorno
+  mesmo dando certo: o roteador levou 2,5 minutos para entregar o tráfego do cabo
+  no AP novo, e o prazo era de 2. O prazo da rede (`rede_retorno_segundos`)
+  passou para 5 minutos.
