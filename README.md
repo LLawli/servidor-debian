@@ -95,6 +95,17 @@ bin/provisionar <nome>                  # aplica
 bin/provisionar <nome> --tags firewall  # só um módulo
 ```
 
+**Trocar a rede Wi-Fi** de um servidor já cadastrado:
+
+```sh
+bin/trocar-wifi <nome>
+```
+
+Pergunta o SSID e a senha, grava no `host_vars` e aplica só a rede. Se o SSH não
+entrar pela rede nova em 2 minutos, o servidor volta sozinho para a anterior.
+Para trocar também o IP estático, mude `endereco` no `host_vars` antes: a
+passada segue o servidor até o endereço novo.
+
 Pede a senha do sudo do servidor, que não é gravada. Na primeira aplicação com
 `confiabilidade_tpm: true`, pede também a senha do LUKS, para gravar o slot do
 TPM2. Rodar de novo é seguro: o que já está certo não muda.

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Troca a rede Wi-Fi de um servidor já cadastrado:
+#   bin/trocar-wifi <nome> [opções do ansible-playbook]
+# Pergunta o SSID e a senha, grava no host_vars/<nome>.yml e aplica só a rede.
+# Se o SSH não entrar pela rede nova em 2 minutos, o servidor volta sozinho
+# para a anterior. Só cobre redes WPA com senha e servidores com uma interface
+# Wi-Fi; para o resto, edite o host_vars.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+nome=${1:?uso: bin/trocar-wifi <nome> [opções do ansible-playbook]}
+shift
+vars="host_vars/$nome.yml"
+[ -f "$vars" ] || { echo "$vars não existe; rode bin/novo-servidor antes." >&2; exit 1; }
+n=$(grep -c '^ *ssid: ' "$vars" || true)
+[ "$n" -eq 1 ] || { echo "$vars tem $n interfaces Wi-Fi; este script só troca quando há uma." >&2; exit 1; }
+
+read -rp "SSID da rede nova: " ssid
+[ -n "$ssid" ] || { echo "SSID vazio." >&2; exit 1; }
+read -rsp "Senha do Wi-Fi $ssid: " senha
+echo
+[ "${#senha}" -ge 8 ] && [ "${#senha}" -le 63 ] || { echo "Uma senha WPA tem de 8 a 63 caracteres." >&2; exit 1; }
+
+# Os valores vão pelo ambiente (não aparecem na lista de processos) e entram
+# como strings JSON marcadas !unsafe: aspas, chaves e % chegam intactos.
+SSID=$ssid SENHA=$senha python3 -I - "$vars" <<'EOF'
+import json, os, re, sys
+
+caminho = sys.argv[1]
+texto = open(caminho, encoding="utf-8").read()
+for chave, valor in (("ssid", os.environ["SSID"]), ("senha", os.environ["SENHA"])):
+    texto, n = re.subn(
+        rf"(?m)^(\s*{chave}: ).*$",
+        lambda m: m.group(1) + "!unsafe " + json.dumps(valor, ensure_ascii=False),
+        texto,
+    )
+    if n != 1:
+        sys.exit(f"esperava uma linha '{chave}:' em {caminho}, achei {n}")
+open(caminho, "w", encoding="utf-8").write(texto)
+EOF
+echo "Gravado em $vars; aplicando a rede."
+exec bin/provisionar "$nome" --tags rede "$@"

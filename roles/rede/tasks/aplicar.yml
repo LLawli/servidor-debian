@@ -121,6 +121,33 @@
       changed_when: true
       register: rede_aplicacao
 
+    # Se o SSH entra pelo IP estático de uma interface e esse IP muda, a
+    # conexão nova tem que procurar o servidor no endereço novo.
+    - name: Guarda o endereço por onde o SSH entrou
+      ansible.builtin.set_fact:
+        rede_ssh_antes: "{{ ansible_host }}"
+
+    - name: Segue o SSH para o endereço novo
+      ansible.builtin.set_fact:
+        ansible_host: "{{ item.endereco.split('/')[0] }}"
+      loop: "{{ rede_interfaces | selectattr('dhcp', 'defined') | rejectattr('dhcp') | list }}"
+      loop_control:
+        label: "{{ item.nome }}: {{ item.endereco }}"
+      when:
+        - ansible_host == ansible_facts[item.nome | replace('-', '_')].ipv4.address | default('')
+        - item.endereco.split('/')[0] != ansible_host
+
+    # Sem isto, o SSH recusa o endereço novo (chave de host desconhecida) e o
+    # retorno desfaz a troca. A chave vem dos fatos, lidos pela conexão já
+    # verificada no endereço antigo.
+    - name: Registra a chave de host do servidor no endereço novo
+      ansible.builtin.known_hosts:
+        name: "{{ ansible_host }}"
+        key: "{{ ansible_host }} ssh-ed25519 {{ ansible_facts.ssh_host_key_ed25519_public }}"
+      delegate_to: localhost
+      become: false
+      when: ansible_host != rede_ssh_antes
+
     - name: Confirma que o SSH voltou
       ansible.builtin.include_role:
         name: retorno
@@ -175,6 +202,14 @@
         tasks_from: desarmar
       vars:
         retorno_nome: rede
+
+    - name: Avisa do endereço novo do SSH
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} agora responde em {{ ansible_host }} (antes {{ rede_ssh_antes }}).
+          Troque ansible_host no inventory/{{ inventory_hostname }}.yml; a chave de host
+          do endereço novo já está no known_hosts.
+      when: ansible_host != rede_ssh_antes
   rescue:
     - name: Mantém o retorno da rede armado
       ansible.builtin.include_role:

@@ -18,6 +18,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - Módulo `secure_boot`: chave própria do servidor, UKI assinado carregado pelo
   shim e pelo systemd-boot, cadastro da chave pelo MOK e boot de teste com volta
   automática ao GRUB. Com ele, o TPM2 só abre o disco no boot do próprio servidor.
+- `bin/trocar-wifi`, que pergunta o SSID e a senha da rede nova, grava no
+  `host_vars` e aplica só a rede.
+- O role `rede` troca o IP estático da interface por onde o SSH entra: a
+  confirmação procura o servidor no endereço novo, registra a chave de host dele
+  no `known_hosts` do laptop e avisa para atualizar o `ansible_host`.
 - O role `confiabilidade` refaz o slot do TPM2 quando ele não abre mais o disco
   (por exemplo, depois de ligar o Secure Boot).
 - Teste de ponta a ponta do Secure Boot numa VM com OVMF, swtpm e LUKS
