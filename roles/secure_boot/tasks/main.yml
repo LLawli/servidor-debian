@@ -1,0 +1,170 @@
+---
+# O initramfs com o clevis (handler do role confiabilidade) tem que existir
+# antes de virar UKI e antes do boot de teste.
+- name: Aplica os handlers pendentes
+  ansible.builtin.meta: flush_handlers
+
+- name: Confere se o boot é UEFI
+  ansible.builtin.stat:
+    path: /sys/firmware/efi
+  register: secure_boot_efi
+
+- name: Recusa sem UEFI
+  ansible.builtin.assert:
+    that: secure_boot_efi.stat.exists
+    fail_msg: "{{ inventory_hostname }} não iniciou em UEFI; reinstale em UEFI ou tire secure_boot de servidor_modulos."
+    quiet: true
+
+- name: Confere a partição EFI
+  ansible.builtin.command:
+    cmd: findmnt -no FSTYPE,SOURCE {{ secure_boot_esp }}
+  register: secure_boot_findmnt
+  changed_when: false
+  check_mode: false
+
+- name: Recusa sem partição EFI montada
+  ansible.builtin.assert:
+    that: secure_boot_findmnt.stdout.split()[0] == 'vfat'
+    fail_msg: "{{ secure_boot_esp }} não é uma partição EFI (vfat) montada."
+    quiet: true
+
+- name: Instala as ferramentas de assinatura
+  ansible.builtin.apt:
+    name: [shim-signed, mokutil, efibootmgr, sbsigntool, systemd-ukify, systemd-boot-efi, python3-cryptography, openssl]
+    state: present
+    install_recommends: false
+
+# Sem isto, cada atualização do grub-efi põe o GRUB de volta em primeiro na
+# NVRAM, e o boot passa a pedir a senha do LUKS (o PCR 7 do GRUB é outro).
+- name: Impede o GRUB de reordenar a NVRAM
+  ansible.builtin.debconf:
+    name: grub-efi-amd64
+    question: grub2/update_nvram
+    vtype: boolean
+    value: "false"
+
+- name: Cria o diretório da chave
+  ansible.builtin.file:
+    path: "{{ secure_boot_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Gera a chave de assinatura
+  ansible.builtin.command:
+    argv:
+      - ukify
+      - genkey
+      - --secureboot-private-key={{ secure_boot_dir }}/db.key
+      - --secureboot-certificate={{ secure_boot_dir }}/db.crt
+      - --secureboot-certificate-common-name={{ secure_boot_nome_chave }}
+      - --secureboot-certificate-validity=36500
+    creates: "{{ secure_boot_dir }}/db.key"
+
+- name: Converte o certificado para o MOK (DER)
+  ansible.builtin.command:
+    cmd: openssl x509 -in {{ secure_boot_dir }}/db.crt -outform DER -out {{ secure_boot_dir }}/db.der
+    creates: "{{ secure_boot_dir }}/db.der"
+
+- name: Lê a linha do kernel atual
+  ansible.builtin.slurp:
+    src: /proc/cmdline
+  register: secure_boot_proc_cmdline
+  when: not secure_boot_cmdline
+
+- name: Grava a linha do kernel do UKI
+  ansible.builtin.copy:
+    dest: /etc/kernel/cmdline
+    mode: "0644"
+    force: false
+    content: >-
+      {{ secure_boot_cmdline
+         or ((secure_boot_proc_cmdline.content | b64decode).split()
+             | reject('match', '^(BOOT_IMAGE|initrd)=')
+             | reject('match', '^panic=') | list + ['panic=10']) | join(' ') }}
+
+- name: Configura o kernel-install para gerar UKI
+  ansible.builtin.copy:
+    dest: /etc/kernel/install.conf
+    mode: "0644"
+    content: |
+      # Gerado pelo servidor-debian (role secure_boot).
+      layout=uki
+      uki_generator=ukify
+
+- name: Configura a assinatura do UKI
+  ansible.builtin.copy:
+    dest: /etc/kernel/uki.conf
+    mode: "0644"
+    content: |
+      # Gerado pelo servidor-debian (role secure_boot).
+      [UKI]
+      SecureBootPrivateKey={{ secure_boot_dir }}/db.key
+      SecureBootCertificate={{ secure_boot_dir }}/db.crt
+
+- name: Instala o conferidor de UKI
+  ansible.builtin.copy:
+    src: servidor-uki
+    dest: /usr/local/sbin/servidor-uki
+    mode: "0755"
+
+- name: Lê a NVRAM
+  ansible.builtin.command:
+    cmd: efibootmgr
+  register: secure_boot_nvram_antes
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# O postinst do systemd-boot roda bootctl install, que se põe em primeiro no
+# BootOrder. A ordem anterior volta logo depois, mesmo se o postinst falhar;
+# o caminho novo só vira o primeiro depois de um boot de teste que deu certo.
+- name: Instala o systemd-boot sem mudar a ordem de boot
+  block:
+    - name: Instala o systemd-boot
+      ansible.builtin.apt:
+        name: [systemd-boot, systemd-boot-efi-amd64-signed]
+        state: present
+        install_recommends: false
+      register: secure_boot_systemd_boot
+  always:
+    - name: Relê a ordem de boot
+      ansible.builtin.command:
+        cmd: efibootmgr
+      register: secure_boot_nvram_instalado
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Devolve a ordem de boot anterior
+      ansible.builtin.command:
+        cmd: efibootmgr --quiet --bootorder {{ secure_boot_ordem_antes }}
+      vars:
+        secure_boot_ordem_antes: "{{ secure_boot_nvram_antes.stdout | regex_search('(?m)^BootOrder: (\\S+)', '\\1') | first }}"
+      when:
+        - not ansible_check_mode
+        - "secure_boot_nvram_instalado.stdout is not search('(?m)^BootOrder: ' ~ secure_boot_ordem_antes ~ '$')"
+      changed_when: true
+
+- name: Configura o systemd-boot
+  ansible.builtin.copy:
+    dest: "{{ secure_boot_esp }}/loader/loader.conf"
+    mode: "0644"
+    content: |
+      # Gerado pelo servidor-debian (role secure_boot).
+      timeout 0
+      editor no
+  when: not ansible_check_mode or secure_boot_systemd_boot is not changed
+
+- name: Garante um UKI assinado para cada kernel
+  ansible.builtin.command:
+    cmd: /usr/local/sbin/servidor-uki {{ secure_boot_esp }} {{ secure_boot_dir }}/db.crt
+  register: secure_boot_uki
+  changed_when: "'refeito' in secure_boot_uki.stdout"
+  when: not ansible_check_mode
+
+- name: Cria e ativa a entrada de boot
+  ansible.builtin.include_tasks: nvram.yml
+  when: not ansible_check_mode
+
+- name: Cadastra a chave no shim (MOK)
+  ansible.builtin.include_tasks: mok.yml
+  when: not ansible_check_mode

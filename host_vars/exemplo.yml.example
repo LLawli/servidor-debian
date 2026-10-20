@@ -2,13 +2,16 @@
 # Variáveis de um servidor: host_vars/<nome>.yml (fica fora do git, pode ter senhas).
 # O bin/novo-servidor gera este arquivo com o que detectar no servidor.
 
-servidor_modulos: [base, confiabilidade, notebook, rede, firewall]
+servidor_modulos: [base, confiabilidade, secure_boot, notebook, rede, firewall]
 
 base_chaves_ssh:
   - "{{ lookup('ansible.builtin.file', '~/.ssh/id_ed25519.pub') }}"
 base_travar_kernel: false
 
 confiabilidade_tpm: true
+
+# secure_boot reinicia o servidor uma vez para testar o boot novo e, no fim,
+# pede uma senha de uso único para confirmar a chave no MokManager (README).
 
 rede_dns: [192.168.1.1]
 rede_interfaces:

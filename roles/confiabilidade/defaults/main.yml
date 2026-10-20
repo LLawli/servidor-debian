@@ -11,10 +11,14 @@ confiabilidade_panico_segundos: 10
 confiabilidade_alvo_padrao: multi-user.target
 
 # Desbloqueio do LUKS pelo TPM2 (clevis), sem digitar senha no boot. A senha
-# original continua num slot próprio. Na primeira vez, pede a senha atual.
-# Com o Secure Boot desligado, o PCR 7 protege pouco: o disco abre sozinho
-# em qualquer boot daquela máquina.
+# original continua num slot próprio. Na primeira vez, pede a senha atual; se
+# o estado do boot mudar (Secure Boot ligado, chave nova), refaz o slot.
+# Sem o módulo secure_boot, o PCR 7 protege pouco: o disco abre sozinho com
+# qualquer boot assinado pelo Debian (um pendrive, ou o GRUB com a linha do
+# kernel editada).
 confiabilidade_tpm: false
 confiabilidade_tpm_pcrs: "7"
+# Senha do LUKS para gravar o slot sem perguntar (o teste em VM usa). Vazio: pergunta.
+confiabilidade_senha_luks: ""
 # Dispositivo LUKS; vazio usa a primeira linha do /etc/crypttab.
 confiabilidade_luks_dispositivo: ""

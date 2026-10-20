@@ -1,0 +1,29 @@
+---
+# Secure Boot com chave própria. O kernel, o initramfs e a linha do kernel
+# viram um UKI assinado por uma chave gerada neste servidor, carregado pelo
+# shim e pelo systemd-boot. A chave entra no shim pelo MOK (confirmada uma vez
+# na tela azul do boot); as chaves de fábrica da placa continuam. Assim o
+# PCR 7 do TPM distingue este boot de qualquer outro (pendrive, GRUB editado).
+
+# Onde ficam a chave privada e o certificado (dentro do LUKS).
+secure_boot_dir: /etc/kernel/servidor-debian
+secure_boot_nome_chave: "{{ inventory_hostname }} Secure Boot"
+
+# Partição EFI, como o instalador do Debian monta.
+secure_boot_esp: /boot/efi
+
+# Linha do kernel gravada no UKI. Vazio: a do boot atual, sem BOOT_IMAGE e com
+# panic=10, para um boot que falha no initramfs reiniciar em vez de parar num
+# shell (a NVRAM então volta ao GRUB). Só vale na primeira vez; depois, edite
+# /etc/kernel/cmdline.
+secure_boot_cmdline: ""
+
+# Rótulo da entrada na NVRAM.
+secure_boot_entrada: servidor-debian
+
+# Antes do boot de teste pelo caminho novo, pede confirmação.
+secure_boot_confirmar_reboot: true
+
+# Senha de uso único para confirmar a chave no MokManager. Vazio: pergunta.
+# Use só letras e números: o MokManager lê o teclado como US.
+secure_boot_senha_mok: ""

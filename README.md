@@ -107,9 +107,38 @@ Os módulos ficam em `servidor_modulos`, no `host_vars` de cada servidor.
 |---|---|
 | `base` | SSH só por chave e sem root, admin no sudo, fontes do apt fixas no codinome, aviso de módulo DKMS sem build, kernel travado (opcional) |
 | `confiabilidade` | watchdog de hardware, reinício depois de kernel panic, boot em `multi-user.target`, LUKS desbloqueado pelo TPM2 (opcional) |
+| `secure_boot` | kernel, initramfs e linha do kernel num UKI assinado por uma chave do servidor, carregado pelo shim e pelo systemd-boot; o TPM2 só abre o disco nesse boot (opcional, veja abaixo) |
 | `notebook` | tampa e teclas de suspensão ignoradas, suspensão mascarada, carga da bateria numa faixa (75 a 80% por padrão), desligamento com 5% |
 | `rede` | systemd-networkd no lugar do ifupdown, Wi-Fi pelo wpa_supplicant sem economia de energia, DNS fixo |
 | `firewall` | nftables com entrada bloqueada, liberando por interface só as portas e origens listadas |
+
+## Secure Boot com chave própria
+
+Só o TPM2 não protege o disco de quem estiver com o notebook nas mãos: com o
+PCR 7 e as chaves de fábrica, um pendrive com Debian, ou o GRUB com
+`break=bottom` na linha do kernel, chega ao mesmo estado e o disco abre
+sozinho. O módulo `secure_boot` fecha isso: gera uma chave no servidor, assina
+com ela um UKI (kernel, initramfs e linha do kernel num arquivo só) e cadastra
+a chave no shim pelo MOK. As chaves de fábrica da placa continuam; só o boot
+assinado pela chave do servidor chega ao PCR 7 que abre o disco.
+
+São três passos, dois deles no console do servidor:
+
+1. `bin/provisionar <nome>` com `secure_boot` em `servidor_modulos`. O servidor
+   reinicia uma vez pelo caminho novo para testar; se o boot falhar, ele volta
+   sozinho pelo GRUB e nada muda. No fim, pede uma senha de uso único (só
+   letras e números).
+2. No servidor, com tela e teclado: reinicie, aperte uma tecla na tela azul
+   (são 10 segundos), escolha **Enroll MOK**, **Continue**, **Yes**, digite a
+   senha de uso único e **Reboot**. Entre na BIOS e ligue o **Secure Boot**,
+   com as chaves de fábrica. O primeiro boot depois disso pede a senha do LUKS.
+3. `bin/provisionar <nome>` de novo: ele refaz o slot do TPM2 para o boot com
+   Secure Boot (pede a senha do LUKS uma vez).
+
+Depois disso, atualizações de kernel geram e assinam o UKI sozinhas. O GRUB
+continua no menu de boot do firmware como reserva, abrindo o disco só com a
+senha. Uma atualização da BIOS ou do dbx muda o PCR 7: o boot volta a pedir a
+senha, e rodar o provisionar de novo refaz o slot.
 
 ## Se a rede ou o firewall der errado
 
@@ -123,7 +152,10 @@ fotos ficam em `/var/backups/servidor-debian/`.
 
 `scripts/ci.sh` roda todos os portões (yamllint, shellcheck, ansible-lint,
 sintaxe, o teste num Debian com systemd em Podman e o pip-audit); o CI roda o
-mesmo script. Arquitetura e decisões estão em [`docs/`](docs/arquitetura.md).
+mesmo script. O módulo `secure_boot` precisa de UEFI, TPM2 e reboot, e é
+testado à parte numa VM com KVM (`tests/vm/vm.sh instalar` uma vez, depois
+`tests/vm/testar.sh`). Arquitetura e decisões estão em
+[`docs/`](docs/arquitetura.md).
 
 ## Licença
 

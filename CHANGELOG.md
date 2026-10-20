@@ -15,6 +15,13 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 - `bin/provisionar`, atalho para aplicar o `site.yml` a um servidor.
 - Guia da instalação do Debian esperada (UEFI, LUKS com LVM, btrfs, tasksel).
 - `scripts/ci.sh` com todos os portões e teste num Debian com systemd em Podman.
+- Módulo `secure_boot`: chave própria do servidor, UKI assinado carregado pelo
+  shim e pelo systemd-boot, cadastro da chave pelo MOK e boot de teste com volta
+  automática ao GRUB. Com ele, o TPM2 só abre o disco no boot do próprio servidor.
+- O role `confiabilidade` refaz o slot do TPM2 quando ele não abre mais o disco
+  (por exemplo, depois de ligar o Secure Boot).
+- Teste de ponta a ponta do Secure Boot numa VM com OVMF, swtpm e LUKS
+  (`tests/vm`), instalada por preseed.
 
 ### Corrigido
 

@@ -5,7 +5,7 @@ all:
       ansible_connection: containers.podman.podman
       ansible_host: servidor-debian-teste
       ansible_user: root
-      servidor_modulos: [base, confiabilidade, notebook, rede, firewall]
+      servidor_modulos: [base, confiabilidade, secure_boot, notebook, rede, firewall]
       base_usuario_admin: root
       base_chaves_ssh:
         - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKbmQBcuTq2W2qEaP6Hnz8fGpZqnnTfGX9P2E5x0ZJ6q teste@servidor-debian

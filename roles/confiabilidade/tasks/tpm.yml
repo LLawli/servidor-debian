@@ -39,14 +39,38 @@
   failed_when: false
   check_mode: false
 
+# Um slot gravado com outro estado de boot (por exemplo, antes de ligar o
+# Secure Boot) não abre mais o disco: o boot volta a pedir a senha. O teste
+# decifra a chave do slot pelo TPM, sem imprimi-la.
+- name: Testa os slots do TPM2 com o boot atual
+  ansible.builtin.shell:
+    cmd: clevis luks pass -d {{ confiabilidade_luks }} -s {{ item }} >/dev/null 2>&1
+  loop: "{{ confiabilidade_clevis.stdout | regex_findall('(?m)^(\\d+): tpm2') }}"
+  register: confiabilidade_slots
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Separa os slots que ainda abrem o disco
+  ansible.builtin.set_fact:
+    confiabilidade_slots_bons: "{{ confiabilidade_slots.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+    confiabilidade_slots_velhos: "{{ confiabilidade_slots.results | rejectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+
 - name: Liga o LUKS ao TPM2
-  when: "'tpm2' not in confiabilidade_clevis.stdout and not ansible_check_mode"
+  when: confiabilidade_slots_bons | length == 0 and not ansible_check_mode
   block:
     - name: Pede a senha atual do LUKS
       ansible.builtin.pause:
         prompt: "Senha atual do LUKS em {{ confiabilidade_luks }} ({{ inventory_hostname }})"
         echo: false
       register: confiabilidade_senha
+      when: not confiabilidade_senha_luks
+
+    - name: Apaga os slots do TPM2 que não abrem mais o disco
+      ansible.builtin.command:
+        cmd: clevis luks unbind -f -d {{ confiabilidade_luks }} -s {{ item }}
+      loop: "{{ confiabilidade_slots_velhos }}"
+      changed_when: true
 
     - name: Grava o slot do TPM2 (PCRs {{ confiabilidade_tpm_pcrs }})
       ansible.builtin.command:
@@ -61,7 +85,7 @@
           - "-"
           - tpm2
           - '{"pcr_bank":"sha256","pcr_ids":"{{ confiabilidade_tpm_pcrs }}"}'
-        stdin: "{{ confiabilidade_senha.user_input }}"
+        stdin: "{{ confiabilidade_senha_luks or confiabilidade_senha.user_input }}"
       no_log: true
       changed_when: true
       notify: Atualiza o initramfs

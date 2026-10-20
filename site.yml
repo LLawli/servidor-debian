@@ -27,6 +27,11 @@
     - role: confiabilidade
       tags: [confiabilidade]
       when: "'confiabilidade' in servidor_modulos"
+    # Reinicia o servidor uma vez, no primeiro uso. O contêiner do teste não
+    # tem UEFI; o role é testado na VM de tests/vm.
+    - role: secure_boot
+      tags: [secure_boot]
+      when: "'secure_boot' in servidor_modulos and not servidor_em_container"
     - role: notebook
       tags: [notebook]
       when: "'notebook' in servidor_modulos"

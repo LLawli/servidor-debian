@@ -1,0 +1,11 @@
+# QEMU com OVMF (Secure Boot) e swtpm, para testar o role secure_boot num
+# Debian de verdade: UEFI, TPM2, LUKS e MokManager. Roda como o usuário de quem
+# chama (podman --userns=keep-id); a imagem não tem nada a compilar.
+FROM docker.io/library/debian:forky
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        qemu-system-x86 qemu-utils ovmf swtpm swtpm-tools python3-virt-firmware \
+    && rm -rf /var/lib/apt/lists/*
+COPY entrada.sh /usr/local/bin/entrada
+USER 1000
+ENTRYPOINT ["/usr/local/bin/entrada"]

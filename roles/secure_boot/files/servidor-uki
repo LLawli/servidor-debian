@@ -1,0 +1,27 @@
+#!/bin/sh
+# Garante, para cada kernel instalado, um UKI na partição EFI assinado pela
+# chave deste servidor, com initramfs. Refaz o que faltar, estiver com outra
+# assinatura ou sem initramfs.
+# Uso: servidor-uki [esp] [certificado]. Imprime "refeito <versão>" a cada UKI refeito.
+set -eu
+crt=${2:-/etc/kernel/servidor-debian/db.crt}
+esp=${1:-/boot/efi}
+for k in /boot/vmlinuz-*; do
+    [ -e "$k" ] || continue
+    v=${k#/boot/vmlinuz-}
+    [ -e "/boot/initrd.img-$v" ] || continue
+    ok=
+    for f in "$esp"/EFI/Linux/*-"$v".efi; do
+        [ -e "$f" ] || continue
+        sbverify --cert "$crt" "$f" >/dev/null 2>&1 || continue
+        # Sem initramfs não abre o LUKS; sem SBAT o shim recusa.
+        secoes=$(ukify inspect "$f" 2>/dev/null) || continue
+        printf '%s\n' "$secoes" | grep -q '^\.initrd:' || continue
+        printf '%s\n' "$secoes" | grep -q '^\.sbat:' || continue
+        ok=1
+    done
+    if [ -z "$ok" ]; then
+        kernel-install add "$v" "$k" "/boot/initrd.img-$v"
+        echo "refeito $v"
+    fi
+done

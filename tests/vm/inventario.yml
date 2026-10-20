@@ -1,0 +1,19 @@
+---
+# A VM de tests/vm/vm.sh, com as senhas de teste do preseed.cfg.
+all:
+  hosts:
+    vm-sb:
+      ansible_host: 127.0.0.1
+      ansible_port: 2222
+      ansible_user: developer
+      ansible_ssh_private_key_file: "{{ vm_dir }}/chave"
+      ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
+      ansible_become_password: teste-sudo-123
+      vm_dir: "{{ lookup('ansible.builtin.env', 'VM_DIR', default='/mnt/dados/caches/vms/servidor-debian-sb') }}"
+      servidor_modulos: [base, confiabilidade, secure_boot]
+      base_chaves_ssh:
+        - "{{ lookup('ansible.builtin.file', vm_dir ~ '/chave.pub') }}"
+      confiabilidade_tpm: true
+      confiabilidade_senha_luks: teste-luks-123
+      secure_boot_confirmar_reboot: false
+      secure_boot_senha_mok: teste123

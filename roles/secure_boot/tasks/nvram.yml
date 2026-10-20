@@ -1,0 +1,112 @@
+---
+# A entrada nova aponta para o shim do Debian (mantido pelo grub-install) e
+# pede a ele o systemd-boot no lugar do GRUB, no mesmo formato que o postinst
+# do systemd-boot usa quando não há GRUB. O GRUB continua como reserva no menu
+# do firmware.
+- name: Acha o disco e a partição EFI
+  ansible.builtin.shell:
+    cmd: |
+      set -eu
+      p=$(basename "$(findmnt -no SOURCE {{ secure_boot_esp }})")
+      d=$(basename "$(dirname "$(readlink -f "/sys/class/block/$p")")")
+      echo "/dev/$d $(cat "/sys/class/block/$p/partition")"
+  register: secure_boot_esp_disco
+  changed_when: false
+
+- name: Lê a NVRAM
+  ansible.builtin.command:
+    cmd: efibootmgr
+  register: secure_boot_nvram
+  changed_when: false
+
+- name: Cria a entrada de boot {{ secure_boot_entrada }}
+  ansible.builtin.command:
+    argv:
+      - efibootmgr
+      - --quiet
+      - --create-only
+      - --disk
+      - "{{ secure_boot_esp_disco.stdout.split()[0] }}"
+      - --part
+      - "{{ secure_boot_esp_disco.stdout.split()[1] }}"
+      - --loader
+      - \EFI\debian\shimx64.efi
+      - --label
+      - "{{ secure_boot_entrada }}"
+      - --unicode
+      - \EFI\systemd\systemd-bootx64.efi \0
+  when: secure_boot_nvram.stdout is not search('(?m)^Boot[0-9A-F]{4}\*? ' ~ secure_boot_entrada ~ '\s')
+  changed_when: true
+
+- name: Relê a NVRAM
+  ansible.builtin.command:
+    cmd: efibootmgr
+  register: secure_boot_nvram
+  changed_when: false
+
+- name: Anota a entrada e o boot atual
+  ansible.builtin.set_fact:
+    secure_boot_num: >-
+      {{ secure_boot_nvram.stdout | regex_search('(?m)^Boot([0-9A-F]{4})\*? ' ~ secure_boot_entrada ~ '\s', '\1') | first }}
+    secure_boot_atual: >-
+      {{ secure_boot_nvram.stdout | regex_search('(?m)^BootCurrent: ([0-9A-F]{4})', '\1') | first }}
+
+# O systemd-stub do UKI deixa esta variável; o GRUB, não.
+- name: Confere se o boot atual veio do UKI
+  ansible.builtin.stat:
+    path: /sys/firmware/efi/efivars/StubInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+  register: secure_boot_stub
+
+- name: Testa um boot pelo caminho novo
+  when: not (secure_boot_stub.stat.exists and secure_boot_atual == secure_boot_num)
+  block:
+    - name: Avisa do boot de teste
+      ansible.builtin.pause:
+        prompt: >-
+          {{ inventory_hostname }} vai reiniciar uma vez pelo systemd-boot para testar.
+          Se o disco não abrir pelo TPM, digite a senha do LUKS no console.
+          Se o boot falhar, ele volta sozinho pelo GRUB. Enter para seguir, Ctrl+C e A para parar
+      when: secure_boot_confirmar_reboot
+
+    - name: Marca o caminho novo só para o próximo boot
+      ansible.builtin.command:
+        cmd: efibootmgr --quiet --bootnext {{ secure_boot_num }}
+      changed_when: true
+
+    - name: Reinicia pelo caminho novo
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        msg: servidor-debian testando o boot pelo systemd-boot
+
+    - name: Relê o boot atual
+      ansible.builtin.command:
+        cmd: efibootmgr
+      register: secure_boot_nvram_depois
+      changed_when: false
+
+    # Outro nome: o when do bloco é reavaliado a cada tarefa, e sobrescrever
+    # secure_boot_stub quebraria essa conta.
+    - name: Confere de novo se o boot veio do UKI
+      ansible.builtin.stat:
+        path: /sys/firmware/efi/efivars/StubInfo-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+      register: secure_boot_stub_depois
+
+    - name: Confirma o boot pelo caminho novo
+      ansible.builtin.assert:
+        that:
+          - secure_boot_stub_depois.stat.exists
+          - "secure_boot_nvram_depois.stdout is search('(?m)^BootCurrent: ' ~ secure_boot_num ~ '$')"
+        fail_msg: >-
+          O boot pelo systemd-boot não deu certo e {{ inventory_hostname }} voltou pelo GRUB.
+          A ordem de boot não foi mudada. Veja o console do servidor ou
+          journalctl -b -1 para saber por quê.
+        quiet: true
+
+- name: Põe a entrada em primeiro na ordem de boot
+  ansible.builtin.command:
+    cmd: >-
+      efibootmgr --quiet --bootorder
+      {{ ([secure_boot_num] + (secure_boot_nvram.stdout | regex_search('(?m)^BootOrder: (\S+)', '\1') | first).split(',')
+          | reject('equalto', secure_boot_num) | list) | join(',') }}
+  when: "secure_boot_nvram.stdout is not search('(?m)^BootOrder: ' ~ secure_boot_num ~ '(,|$)')"
+  changed_when: true

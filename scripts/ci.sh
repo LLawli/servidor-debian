@@ -16,7 +16,10 @@ if command -v shellcheck >/dev/null 2>&1 && shellcheck --version >/dev/null 2>&1
 else
     shellcheck() { docker run --rm -v "$PWD:/mnt:ro" -w /mnt docker.io/koalaman/shellcheck:v0.11.0 "$@"; }
 fi
-shellcheck bin/* scripts/*.sh tests/container/testar.sh roles/*/files/servidor-debian-retorno roles/base/files/confere-dkms
+shellcheck bin/* scripts/*.sh tests/*/*.sh roles/*/files/servidor-debian-retorno roles/base/files/confere-dkms \
+    roles/secure_boot/files/servidor-uki
+# O console da VM de teste (Python, só biblioteca padrão) precisa ao menos compilar.
+python3 -I -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' tests/vm/console.py
 
 echo "== lint (ansible-lint, perfil production)"
 uv run ansible-lint --strict </dev/null 2>&1 | cat; test "${PIPESTATUS[0]}" -eq 0

@@ -1,0 +1,82 @@
+---
+- name: Lê o estado do Secure Boot
+  ansible.builtin.command:
+    cmd: mokutil --sb-state
+  register: secure_boot_estado
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Confere se há chave do DKMS
+  ansible.builtin.stat:
+    path: /var/lib/dkms/mok.pub
+  register: secure_boot_dkms
+
+# A chave do DKMS entra junto: com o Secure Boot ligado, o kernel só carrega
+# módulo assinado por chave conhecida.
+- name: Lista as chaves que o shim precisa conhecer
+  ansible.builtin.set_fact:
+    secure_boot_chaves: >-
+      {{ [secure_boot_dir ~ '/db.der']
+         + (['/var/lib/dkms/mok.pub'] if secure_boot_dkms.stat.exists else []) }}
+
+- name: Confere as chaves no MOK
+  ansible.builtin.command:
+    cmd: mokutil --test-key {{ item }}
+  loop: "{{ secure_boot_chaves }}"
+  register: secure_boot_teste
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# --test-key diz "is not enrolled", "is already enrolled" ou "is already in
+# the enrollment request" (pedido feito, falta confirmar no MokManager).
+- name: Separa as chaves que faltam pedir e as que faltam confirmar
+  ansible.builtin.set_fact:
+    secure_boot_novas: >-
+      {{ secure_boot_teste.results | selectattr('stdout', 'search', 'is not enrolled')
+         | map(attribute='item') | list }}
+    secure_boot_pedidas: >-
+      {{ secure_boot_teste.results | selectattr('stdout', 'search', 'enrollment request')
+         | map(attribute='item') | list }}
+
+- name: Pede o cadastro da chave no próximo boot
+  when: secure_boot_novas | length > 0
+  block:
+    - name: Pede a senha de uso único do MokManager
+      ansible.builtin.pause:
+        prompt: >-
+          Senha de uso único para confirmar a chave na tela azul do próximo boot
+          ({{ inventory_hostname }}); use só letras e números
+        echo: false
+      register: secure_boot_senha_digitada
+      when: not secure_boot_senha_mok
+
+    # O hash é o mesmo crypt SHA-512 do mokutil --generate-hash, mas a senha
+    # entra pela entrada padrão, não pela linha de comando.
+    - name: Grava o pedido de cadastro
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          h=$(mktemp)
+          trap 'rm -f "$h"' EXIT
+          openssl passwd -6 -stdin > "$h"
+          mokutil --import {{ (secure_boot_novas + secure_boot_pedidas) | join(' ') }} --hash-file "$h"
+        stdin: "{{ secure_boot_senha_mok or secure_boot_senha_digitada.user_input }}"
+      no_log: true
+      changed_when: true
+
+- name: Diz o que falta fazer no console
+  ansible.builtin.debug:
+    msg: >-
+      {% if secure_boot_novas or secure_boot_pedidas %}
+      Falta confirmar a chave: reinicie {{ inventory_hostname }} com tela e teclado,
+      aperte uma tecla na tela azul (são 10 segundos), escolha Enroll MOK, Continue, Yes,
+      digite a senha de uso único e Reboot.
+      Depois ligue o Secure Boot na BIOS e rode o provisionar de novo, para refazer o slot do TPM.
+      {% elif 'enabled' not in secure_boot_estado.stdout %}
+      A chave já está no shim. Ligue o Secure Boot na BIOS (com as chaves de fábrica) e rode
+      o provisionar de novo, para refazer o slot do TPM. Até lá o boot pede a senha do LUKS.
+      {% else %}
+      Secure Boot ligado, com a chave de {{ inventory_hostname }} no shim.
+      {% endif %}
